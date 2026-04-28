@@ -1,4 +1,13 @@
 {
+  "model": {
+    "compressionThreshold": 0.8
+  },
+  "contextManagement": {
+    "historyWindow": {
+      "maxTokens": 500000,
+      "retainedTokens": 60000
+    }
+  },
   "hooks": {
     "SessionStart": [
       {

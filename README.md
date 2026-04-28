@@ -22,6 +22,18 @@ Clone this repository into your home directory (or any preferred location) and r
 ./setup.csh
 ```
 
+### Hook Dependencies (Obsidian Notes)
+The configuration relies on external hooks provided by the `obsidian_notes` repository. This repository must be cloned in parallel to your home directory:
+
+```bash
+git clone git@github.com:evren2k2/obsidian_notes.git ~/obsidian_notes
+```
+
+These hooks handle:
+- **Session Lifecycle:** `session-start.sh` and `session-stop.sh` for context loading/cleanup.
+- **Compaction Safety:** `pre-compact.sh` to ensure vault state is persisted before context compression.
+- **Validation:** `validate-vault-write.sh`, `detect-stale-notes.sh`, and `update-timeline.sh` to maintain vault integrity after file edits.
+
 ### Windows (PowerShell)
 *Run in an elevated PowerShell terminal or ensure Developer Mode is enabled.*
 ```powershell
