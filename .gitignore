@@ -1,0 +1,25 @@
+# Ignore secrets and credentials
+**/.*credentials*
+**/oauth_creds.json
+**/google_accounts.json
+**/*.backup.*
+**/*.bak
+
+# Ignore transient data
+**/cache/
+**/history/
+**/history.jsonl
+**/sessions/
+**/tmp/
+**/downloads/
+**/paste-cache/
+**/plans/
+**/session-env/
+**/shell-snapshots/
+**/file-history/
+**/projects/
+**/.project_root
+**/.nfs*
+
+# Ignore OS files
+.DS_Store
