@@ -1,8 +1,8 @@
-# Claude User Instructions
+# Gemini User Instructions
 
 ## Identity & Notes Vault
 
-My Obsidian vault is Claude's persistent memory. When Claude learns something, makes a connection, solves a problem, or builds context across sessions — it lives here.
+My Obsidian vault is Gemini's persistent memory. When Gemini learns something, makes a connection, solves a problem, or builds context across sessions — it lives here.
 
 **Vault:** `~/obsidian_notes/` → `git@github.com:evren2k2/obsidian_notes.git`
 **Sync:** Cron auto-commits every 5 min. Write files, no manual push needed.
@@ -13,7 +13,7 @@ My Obsidian vault is Claude's persistent memory. When Claude learns something, m
 - `areas/` — Durable domain knowledge (promoted from projects when reused)
 - `library/` — Atomic reference notes, papers, tools
 - `personal/` — Goals, journal, personal context
-- `claude/` — Agent meta-layer (session log, connections, open questions)
+- `Gemini/` — Agent meta-layer (session log, connections, open questions)
 
 **Conventions:** `YYYY-MM-DD-topic.md` or `topic.md`. Lowercase-hyphenated filenames only. Use `[[wikilinks]]` to connect ideas.
 **Permissions:** Never delete notes without confirming. Prefer appending to overwriting.
@@ -26,7 +26,7 @@ Vault context is loaded via subagents to keep main context clean. The SessionSta
 1. Spawn an Explore subagent with: "Read vault context for project `<name>`. Read `~/obsidian_notes/projects/<name>/working-context.md` (latest checkpoint), search for `project: <name>` frontmatter to find related notes. Return a structured summary: current goal, plan status, key decisions, open items, active files. Keep summary under 25 lines."
 2. The subagent returns only the summary — main context never ingests full vault notes.
 
-**When making decisions or planning:** Also spawn subagent to check `~/obsidian_notes/claude/open-questions.md`.
+**When making decisions or planning:** Also spawn subagent to check `~/obsidian_notes/Gemini/open-questions.md`.
 
 **When you need specific vault info:** Use subagent, not direct Read/Grep of vault files. Exception: if you need a single specific file and know its exact path, direct read is fine.
 
@@ -42,7 +42,7 @@ Vault context is loaded via subagents to keep main context clean. The SessionSta
 ## Note Quality Gate
 
 Before writing ANY note to the vault, verify:
-1. **Future value** — Would a future Claude instance genuinely benefit? (not just "nice to have")
+1. **Future value** — Would a future Gemini instance genuinely benefit? (not just "nice to have")
 2. **No duplication** — Is this already in the codebase, git history, or existing notes?
 3. **Frontmatter present** — Every note MUST have `date`, `tags`, `type`, and `status` in YAML frontmatter
 4. **Wikilinks included** — Link to concepts, not parents. No hub/index files.
@@ -63,4 +63,4 @@ For high-stakes output (pre-tapeout RTL, verification infrastructure, production
 
 ## Instincts
 
-Learned behavioral patterns live in `~/obsidian_notes/claude/instincts.yaml`. Each instinct has a `project:` field (`global` or project name). When a project-scoped instinct is validated at confidence >= 0.8 in 2+ projects, promote it to `project: global`.
+Learned behavioral patterns live in `~/obsidian_notes/Gemini/instincts.yaml`. Each instinct has a `project:` field (`global` or project name). When a project-scoped instinct is validated at confidence >= 0.8 in 2+ projects, promote it to `project: global`.
