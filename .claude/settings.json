@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/session-start.sh",
+            "command": "$HOME/agent-configs/hooks/session-start.sh",
             "timeout": 10,
             "statusMessage": "Loading vault context..."
           }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/pre-compact.sh",
+            "command": "$HOME/agent-configs/hooks/pre-compact.sh",
             "timeout": 10,
             "statusMessage": "Checking vault state before compression..."
           }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/session-stop.sh",
+            "command": "$HOME/agent-configs/hooks/session-stop.sh",
             "timeout": 5,
             "statusMessage": "Session end check..."
           }
@@ -42,19 +42,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/validate-vault-write.sh",
+            "command": "$HOME/agent-configs/hooks/validate-vault-write.sh",
             "timeout": 5,
             "statusMessage": "Validating vault write..."
           },
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/detect-stale-notes.sh",
+            "command": "$HOME/agent-configs/hooks/detect-stale-notes.sh",
             "timeout": 5,
             "statusMessage": "Checking for stale vault notes..."
           },
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/update-timeline.sh",
+            "command": "$HOME/agent-configs/hooks/update-timeline.sh",
             "timeout": 5,
             "statusMessage": "Updating timeline..."
           }
@@ -65,19 +65,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/validate-vault-write.sh",
+            "command": "$HOME/agent-configs/hooks/validate-vault-write.sh",
             "timeout": 5,
             "statusMessage": "Validating vault write..."
           },
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/detect-stale-notes.sh",
+            "command": "$HOME/agent-configs/hooks/detect-stale-notes.sh",
             "timeout": 5,
             "statusMessage": "Checking for stale vault notes..."
           },
           {
             "type": "command",
-            "command": "$HOME/obsidian_notes/scripts/update-timeline.sh",
+            "command": "$HOME/agent-configs/hooks/update-timeline.sh",
             "timeout": 5,
             "statusMessage": "Updating timeline..."
           }

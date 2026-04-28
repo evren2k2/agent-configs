@@ -22,7 +22,7 @@ Determine the project from your CWD or the task at hand. Match against existing 
 - Working in `~/ECE_8893_FPGA/` → `projects/ece8893-fpga/working-context.md`
 - Working in `~/teknofest_chip_design/` → create `projects/teknofest/working-context.md`
 
-**Fallback:** If no project matches, use `~/obsidian_notes/claude/working-context.md`
+**Fallback:** If no project matches, use `~/obsidian_notes/agent/working-context.md`
 
 ## Format
 
@@ -66,13 +66,13 @@ Anything unresolved, waiting on the user, or stuck. "None" if clear.
 After writing the checkpoint, **always** write a one-line session tag file:
 
 ```bash
-echo "<topic>" > ~/.claude/.session-topic
+echo "<topic>" > ~/.gemini/.session-topic
 ```
 
 Where `<topic>` is the parenthetical from your checkpoint header. For example, if your header is `## Checkpoint — 2026-04-14 (SVA protocol checkers)`, write:
 
 ```bash
-echo "SVA protocol checkers" > ~/.claude/.session-topic
+echo "SVA protocol checkers" > ~/.gemini/.session-topic
 ```
 
 This tag tells the pre-compact hook which checkpoint to recover if compaction fires. Without it, the hook can only list checkpoint headers and the post-compact agent must figure out which is relevant via a subagent.

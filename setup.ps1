@@ -22,17 +22,32 @@ function Setup-Links($agent) {
         
         $itemInfo = Get-Item -Path $dest -ErrorAction SilentlyContinue
         
+        $isDir = (Get-Item -Path $src).PSIsContainer
+        $linkType = if ($isDir) { "Junction" } else { "HardLink" }
+
         if ($null -ne $itemInfo -and $itemInfo.Attributes -match "ReparsePoint") {
-            Write-Host "  [Skipping] $item (already a symlink)"
+            Write-Host "  [Skipping] $item (already a link)"
         }
         elseif (Test-Path $dest) {
             Write-Host "  [Backup] Moving existing $item to $item$BACKUP_SUFFIX" -ForegroundColor Yellow
             Rename-Item -Path $dest -NewName ($item + $BACKUP_SUFFIX)
-            New-Item -ItemType SymbolicLink -Path $dest -Target $src | Out-Null
+            
+            try {
+                New-Item -ItemType SymbolicLink -Path $dest -Target $src -ErrorAction Stop | Out-Null
+                Write-Host "  [Linking] $item (SymbolicLink)" -ForegroundColor Green
+            } catch {
+                New-Item -ItemType $linkType -Path $dest -Target $src | Out-Null
+                Write-Host "  [Linking] $item ($linkType Fallback)" -ForegroundColor Yellow
+            }
         }
         else {
-            Write-Host "  [Linking] $item" -ForegroundColor Green
-            New-Item -ItemType SymbolicLink -Path $dest -Target $src | Out-Null
+            try {
+                New-Item -ItemType SymbolicLink -Path $dest -Target $src -ErrorAction Stop | Out-Null
+                Write-Host "  [Linking] $item (SymbolicLink)" -ForegroundColor Green
+            } catch {
+                New-Item -ItemType $linkType -Path $dest -Target $src | Out-Null
+                Write-Host "  [Linking] $item ($linkType Fallback)" -ForegroundColor Yellow
+            }
         }
     }
 }

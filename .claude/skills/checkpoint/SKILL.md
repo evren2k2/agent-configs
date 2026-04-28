@@ -22,7 +22,7 @@ Determine the project from your CWD or the task at hand. Match against existing 
 - Working in `~/ECE_8893_FPGA/` → `projects/ece8893-fpga/working-context.md`
 - Working in `~/teknofest_chip_design/` → create `projects/teknofest/working-context.md`
 
-**Fallback:** If no project matches, use `~/obsidian_notes/claude/working-context.md`
+**Fallback:** If no project matches, use `~/obsidian_notes/agent/working-context.md`
 
 ## Format
 

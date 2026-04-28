@@ -42,7 +42,7 @@ Check every file:
 - `areas/` — durable domain knowledge (promoted from projects/ when reused).
 - `library/` — atomic reference notes, papers, tools.
 - `personal/` — goals, journal, personal context.
-- `claude/` — session-log, open-questions, connections, instincts, context files.
+- `agent/` — session-log, open-questions, connections, instincts, context files.
 
 **Flag:** Any `.md` in vault root (except README.md). Any note mismatching its folder's purpose.
 
@@ -66,7 +66,7 @@ Every `.md` file should be:
 
 ### 5. Frontmatter Validation (CRITICAL)
 
-**Every note** (except README.md and `claude/` running logs) MUST have YAML frontmatter:
+**Every note** (except README.md and `agent/` running logs) MUST have YAML frontmatter:
 
 ```yaml
 ---
@@ -105,7 +105,7 @@ For each wikilink, verify target exists. Classify as:
 
 A note is orphaned if:
 - Not linked FROM any other note
-- Not a `claude/` system file or README
+- Not a `agent/` system file or README
 
 **This is a flag for review, NOT an automatic fix.** Only add a link if there's a genuine conceptual connection. Standalone reference notes (especially in `library/`) are often legitimately orphaned — they're found by search, not by graph traversal. Do NOT add forced links just to pass the audit.
 
@@ -143,10 +143,10 @@ find ~/obsidian_notes -name "*.md" -not -path "*/.obsidian/*" -not -path "*/.git
 
 ### 10. Stale Content & Inbox Hygiene
 
-Check `claude/session-log.md`:
+Check `agent/session-log.md`:
 - Open items from >2 weeks ago that were never resolved?
 
-Check `claude/open-questions.md`:
+Check `agent/open-questions.md`:
 - Questions now answered (in codebase or vault)?
 - Questions no longer relevant?
 
@@ -157,7 +157,7 @@ Check `inbox/`:
 
 ### 11. Connection Quality
 
-Read `claude/connections.md`:
+Read `agent/connections.md`:
 - Are connections genuine cross-domain links (not forced)?
 - Do they include confidence levels?
 - Are any stale or invalidated?
@@ -175,8 +175,8 @@ Read `claude/connections.md`:
 
 ### 14. CLAUDE.md / Rules Freshness
 
-- Does `~/.claude/CLAUDE.md` accurately reflect current vault structure?
-- Does `~/.claude/rules/obsidian-notes.md` match actual conventions being followed?
+- Does `~/.gemini/GEMINI.md` accurately reflect current vault structure?
+- Does `~/.gemini/rules/obsidian-notes.md` match actual conventions being followed?
 - Are any instructions stale or contradictory?
 
 ---

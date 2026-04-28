@@ -32,7 +32,7 @@ The vault is Claude's **external brain** — persistent, cross-session memory wh
 ├── areas/       Durable domain knowledge (promoted from projects/ when reused).
 ├── library/     Atomic reference notes, papers, tools.
 ├── personal/    Goals, journal, personal context.
-└── claude/      Claude's own synthesis, connections, open questions.
+└── agent/       Agent's own synthesis, connections, open questions.
     ├── session-log.md      Running log (append-only)
     ├── open-questions.md   Unresolved questions (append-only)
     ├── connections.md      Cross-domain links (append-only)
@@ -116,7 +116,7 @@ Vault audit, quality checks, cleanup. Load the `obsidian-audit` skill instead.
 
 ## Session Log Pattern
 
-At the end of meaningful sessions, append to `claude/session-log.md`:
+At the end of meaningful sessions, append to `agent/session-log.md`:
 
 ```markdown
 ## YYYY-MM-DD
@@ -152,7 +152,7 @@ Only add genuine cross-domain connections. Forced connections degrade signal.
 
 ## Instincts (Learned Patterns)
 
-`claude/instincts.yaml` tracks behavioral patterns learned across sessions. Each instinct has a confidence score (0.0-1.0) that evolves:
+`agent/instincts.yaml` tracks behavioral patterns learned across sessions. Each instinct has a confidence score (0.0-1.0) that evolves:
 - **Increases** when the pattern is validated in practice
 - **Decreases** when contradicted
 - **Pruned** below 0.3 confidence
@@ -184,8 +184,8 @@ When searching the vault for context, use the **Grep tool** (not bash grep) with
 4. **Max 3 cycles** — if not found by then, the vault doesn't have it.
 
 Also check:
-- `claude/session-log.md` — what was done before
-- `claude/open-questions.md` — unresolved items
+- `agent/session-log.md` — what was done before
+- `agent/open-questions.md` — unresolved items
 
 ---
 

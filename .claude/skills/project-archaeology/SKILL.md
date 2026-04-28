@@ -174,7 +174,7 @@ If the answer to any of these is no, go back and dig deeper on those themes.
    - **Project overview** — ground truth summary, themes, stage pipeline, how pieces connect. This is the entry point. It should trace the complete flow from requirements to implementation.
    - **Theme notes** — one per major theme that has enough substance. Each must cover: what it does, how to use it, why it's designed this way, what it connects to.
    - **Cross-cutting reference** — if reusable patterns, workflows, or operational knowledge emerges that spans themes
-6. Append to `claude/session-log.md` with archaeology summary
+6. Append to `agent/session-log.md` with archaeology summary
 7. Cleanup:
    - Verify all notes pass quality gate (frontmatter, wikilinks, filenames, correct folder)
    - If PASS: delete scratch workspace
