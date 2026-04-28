@@ -20,12 +20,13 @@ setup_links() {
         
         [ ! -e "$src" ] && continue
         
-        if [ -L "$dest" ]; then
-            echo "  [Skipping] $item (already a symlink)"
+        if [ -L "$dest" ] || [ -e "$dest" ] && [ "$src" -ef "$dest" ]; then
+            echo "  [Skipping] $item (already linked)"
         elif [ -e "$dest" ]; then
             echo "  [Backup] Moving existing $item to $item$BACKUP_SUFFIX"
             mv "$dest" "$dest$BACKUP_SUFFIX"
             ln -s "$src" "$dest"
+            echo "  [Linking] $item"
         else
             echo "  [Linking] $item"
             ln -s "$src" "$dest"
