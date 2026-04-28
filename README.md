@@ -12,7 +12,7 @@ A centralized repository for shared configurations, rules, and skills for **Clau
 
 ## Requirements
 
-- **Git:** Required for cloning and version control.
+- **Git:** Required for cloning and version control. **Git Bash** is specifically required on Windows to execute the shell-based hooks.
 - **Node.js & npm:** Required for Claude Code installation and hook execution.
 - **Obsidian Notes:** The hooks are hardcoded to look for the vault at `~/obsidian_notes` (`C:\Users\<user>\obsidian_notes` on Windows). This folder **must** be placed exactly there for the hooks to function.
 - **Permissions:** 

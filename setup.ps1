@@ -1,6 +1,15 @@
 # setup.ps1 - Symlink agent configurations for Windows PowerShell
 # Note: Requires Developer Mode or Administrative privileges for symlinks
 
+# Check for Git Bash (required for .sh hooks on Windows)
+if (-not (Get-Command bash -ErrorAction SilentlyContinue)) {
+    Write-Host "ERROR: 'bash' not found in PATH." -ForegroundColor Red
+    Write-Host "Git Bash is required to run the agent hooks on Windows." -ForegroundColor Red
+    Write-Host "Please install Git for Windows: https://gitforwindows.org/" -ForegroundColor Cyan
+    Write-Host "Ensure 'Git\bin' or 'Git\usr\bin' is added to your system PATH." -ForegroundColor Cyan
+    exit 1
+}
+
 $REPO_DIR = $PSScriptRoot
 $BACKUP_SUFFIX = ".orig." + (Get-Date -Format "yyyyMMdd_HHmmss")
 
