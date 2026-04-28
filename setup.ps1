@@ -55,4 +55,13 @@ function Setup-Links($agent) {
 Setup-Links "claude"
 Setup-Links "gemini"
 
-Write-Host "Done! Configuration symlinks established." -ForegroundColor Green
+Write-Host "`nDone! Configuration links established." -ForegroundColor Green
+Write-Host "`nNext Step: Setup your Obsidian Vault" -ForegroundColor Cyan
+Write-Host "The configurations expect a vault at: $(Join-Path $HOME "obsidian_notes")"
+Write-Host ""
+Write-Host "Option A: Clone an existing vault repo:"
+Write-Host "  git clone <your-repo-url> $(Join-Path $HOME "obsidian_notes")"
+Write-Host ""
+Write-Host "Option B: Initialize a fresh vault:"
+Write-Host "  .\init-vault.ps1"
+

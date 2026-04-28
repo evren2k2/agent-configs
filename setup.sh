@@ -37,4 +37,13 @@ setup_links() {
 setup_links "claude"
 setup_links "gemini"
 
-echo "Done! Configuration symlinks established."
+echo -e "\nDone! Configuration links established."
+echo -e "\nNext Step: Setup your Obsidian Vault"
+echo "The configurations expect a vault at: $HOME/obsidian_notes"
+echo ""
+echo "Option A: Clone an existing vault repo:"
+echo "  git clone <your-repo-url> $HOME/obsidian_notes"
+echo ""
+echo "Option B: Initialize a fresh vault:"
+echo "  ./init-vault.sh"
+
