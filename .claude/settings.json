@@ -1,7 +1,16 @@
 {
-  "additionalDirectories": [
+  "trustedDirectories": [
     "~/obsidian_notes"
   ],
+  "permissions": {
+    "additionalDirectories": [
+      "~/obsidian_notes"
+    ],
+    "allow": [
+      "Read(~/obsidian_notes/**)",
+      "Write(~/obsidian_notes/**)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
