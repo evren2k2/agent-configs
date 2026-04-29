@@ -36,12 +36,13 @@ $(
     # 1. The vault itself
     # 2. Sibling directories of the vault that match names in projects/
     REPOS="$VAULT"
-    for PROJ_DIR in "$VAULT"/projects/*; do
-        [ -d "$PROJ_DIR" ] || continue
-        PROJ_NAME=$(basename "$PROJ_DIR")
-        # Check if a sibling directory exists with this project name
-        if [ -d "$HOME/$PROJ_NAME/.git" ]; then
-            REPOS="$REPOS $HOME/$PROJ_NAME"
+    # Find Git repositories in HOME and see if they match a vault project
+    for REPO_DIR in "$HOME"/*/; do
+        [ -d "$REPO_DIR/.git" ] || continue
+        REPO_NAME=$(basename "$REPO_DIR")
+        MAPPED_NAME=$(echo "$REPO_NAME" | sed -e 's/ /-/g' -e 's/_/-/g' | tr '[:upper:]' '[:lower:]' | sed -e 's/--/-/g')
+        if [ -d "$VAULT/projects/$MAPPED_NAME" ]; then
+            REPOS="$REPOS $REPO_DIR"
         fi
     done
 
