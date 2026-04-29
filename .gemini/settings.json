@@ -34,6 +34,7 @@
     ],
     "PreCompress": [
       {
+        "matcher": "manual",
         "hooks": [
           {
             "type": "command",
