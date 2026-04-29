@@ -82,7 +82,7 @@ Run `crontab -e` and add the following line to sync every 5 minutes:
 Create a new task in **Task Scheduler** to run every 5 minutes:
 - **Action:** Start a program
 - **Program/script:** `powershell.exe`
-- **Add arguments:** `-NoProfile -WindowStyle Hidden -File "$HOME\agent-configs\hooks\server-sync.ps1"`
+- **Add arguments:** `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%USERPROFILE%\agent-configs\hooks\server-sync.ps1"`
 
 ### 2. Manual Sync
 If you need to sync immediately, you can run:

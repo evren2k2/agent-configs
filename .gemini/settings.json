@@ -2,6 +2,17 @@
   "model": {
     "compressionThreshold": 0.8
   },
+  "context": {
+    "includeDirectories": [
+      "~/obsidian_notes"
+    ],
+    "loadMemoryFromIncludeDirectories": true
+  },
+  "tools": {
+    "sandboxAllowedPaths": [
+      "~/obsidian_notes"
+    ]
+  },
   "contextManagement": {
     "historyWindow": {
       "maxTokens": 500000,

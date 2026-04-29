@@ -1,4 +1,7 @@
 {
+  "additionalDirectories": [
+    "~/obsidian_notes"
+  ],
   "hooks": {
     "SessionStart": [
       {

@@ -25,13 +25,13 @@ $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
 git pull --rebase origin main 2>&1 | Out-String | Set-Variable pullResult
 
 if ($LASTEXITCODE -ne 0) {
-    "$timestamp: PULL FAILED with rebase. Aborting rebase and trying merge with strategy 'ours'..." | Add-Content $LOG_FILE
+    "${timestamp}: PULL FAILED with rebase. Aborting rebase and trying merge with strategy 'ours'..." | Add-Content $LOG_FILE
     git rebase --abort 2>$null
     
     # Try to merge, favoring local changes on conflict
     git pull origin main --no-rebase -X ours --no-edit 2>&1 | Out-String | Set-Variable mergeResult
     if ($LASTEXITCODE -ne 0) {
-        "$timestamp: MERGE FAILED. Manual intervention required." | Add-Content $LOG_FILE
+        "${timestamp}: MERGE FAILED. Manual intervention required." | Add-Content $LOG_FILE
         Pop-Location
         exit 1
     }
@@ -40,10 +40,10 @@ if ($LASTEXITCODE -ne 0) {
 # Step 3: Push
 git push origin main 2>&1 | Out-String | Set-Variable pushResult
 if ($LASTEXITCODE -ne 0) {
-    "$timestamp: PUSH FAILED" | Add-Content $LOG_FILE
+    "${timestamp}: PUSH FAILED" | Add-Content $LOG_FILE
     Pop-Location
     exit 1
 }
 
-"$timestamp: Sync successful" | Add-Content $LOG_FILE
+"${timestamp}: Sync successful" | Add-Content $LOG_FILE
 Pop-Location
