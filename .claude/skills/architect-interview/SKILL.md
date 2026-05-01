@@ -1,6 +1,8 @@
 ---
 name: architect-interview
 description: Use this skill when the user asks for new code architecture, system design, or technical plans. It ensures all assumptions are resolved through an interview process.
+agent: Plan
+user-invocable: false
 ---
 
 # SKILL: Architecture & Code Discovery Interview
