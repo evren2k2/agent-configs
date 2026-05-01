@@ -20,6 +20,7 @@
 **/projects/
 **/.project_root
 **/.nfs*
+**/sync.log
 
 # Ignore OS files
 .DS_Store

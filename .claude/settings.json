@@ -1,14 +1,11 @@
 {
-  "trustedDirectories": [
-    "~/obsidian_notes"
-  ],
   "permissions": {
-    "additionalDirectories": [
-      "~/obsidian_notes"
-    ],
     "allow": [
       "Read(~/obsidian_notes/**)",
       "Write(~/obsidian_notes/**)"
+    ],
+    "additionalDirectories": [
+      "~/obsidian_notes"
     ]
   },
   "hooks": {
@@ -97,6 +94,9 @@
       }
     ]
   },
+  "trustedDirectories": [
+    "~/obsidian_notes"
+  ],
   "security": {
     "auth": {
       "selectedType": "oauth-personal"
@@ -105,5 +105,6 @@
   "ide": {
     "hasSeenNudge": true,
     "enabled": true
-  }
+  },
+  "advisorModel": "opus"
 }
