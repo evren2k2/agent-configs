@@ -78,11 +78,16 @@ Run `crontab -e` and add the following line to sync every 5 minutes:
 */5 * * * * $HOME/agent-configs/hooks/server-sync.sh > /dev/null 2>&1
 ```
 
-#### Windows (Task Scheduler)
+#### Windows Task Scheduler
 Create a new task in **Task Scheduler** to run every 5 minutes:
 - **Action:** Start a program
 - **Program/script:** `powershell.exe`
 - **Add arguments:** `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%USERPROFILE%\agent-configs\hooks\server-sync.ps1"`
+- **Settings (Critical):**
+    - **General:** Select "Run only when user is logged on" (required for Git credential access).
+    - **Settings:** Set "Stop the task if it runs longer than" to **2 minutes**.
+    - **Settings:** Enable "If the running task does not end when requested, force it to stop."
+
 
 ### 2. Manual Sync
 If you need to sync immediately, you can run:
