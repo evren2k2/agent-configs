@@ -82,11 +82,12 @@ Run `crontab -e` and add the following line to sync every 5 minutes:
 To prevent a PowerShell window from flashing every 5 minutes, use the provided VBScript wrapper.
 
 1. **Verify the wrapper exists:** Ensure `agent-configs/hooks/silent-sync.vbs` is present.
-2. **Create or Update the Task:** Run the following command in an administrator terminal (it will prompt for your password):
+2. **Create or Update the Task:** Run the following command in an administrator terminal:
 
 ```powershell
-schtasks /create /tn "sync obsidian" /tr "wscript.exe \"%USERPROFILE%\agent-configs\hooks\silent-sync.vbs\"" /sc minute /mo 5 /st 00:00 /du 9999:59 /ri 5 /k /it /f
+schtasks /create /sc minute /mo 5 /tn "sync obsidian" /tr "wscript.exe %USERPROFILE%\agent-configs\hooks\silent-sync.vbs" /it /f
 ```
+
 
 - **Program/script:** `wscript.exe`
 - **Add arguments:** `"%USERPROFILE%\agent-configs\hooks\silent-sync.vbs"`
