@@ -78,14 +78,21 @@ Run `crontab -e` and add the following line to sync every 5 minutes:
 */5 * * * * $HOME/agent-configs/hooks/server-sync.sh > /dev/null 2>&1
 ```
 
-#### Windows Task Scheduler
-Create a new task in **Task Scheduler** to run every 5 minutes:
-- **Action:** Start a program
-- **Program/script:** `powershell.exe`
-- **Add arguments:** `-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%USERPROFILE%\agent-configs\hooks\server-sync.ps1"`
+#### Windows Task Scheduler (Silent Sync)
+To prevent a PowerShell window from flashing every 5 minutes, use the provided VBScript wrapper.
+
+1. **Verify the wrapper exists:** Ensure `agent-configs/hooks/silent-sync.vbs` is present.
+2. **Create or Update the Task:** Run the following command in an administrator terminal (it will prompt for your password):
+
+```powershell
+schtasks /create /tn "sync obsidian" /tr "wscript.exe \"%USERPROFILE%\agent-configs\hooks\silent-sync.vbs\"" /sc minute /mo 5 /st 00:00 /du 9999:59 /ri 5 /k /it /f
+```
+
+- **Program/script:** `wscript.exe`
+- **Add arguments:** `"%USERPROFILE%\agent-configs\hooks\silent-sync.vbs"`
 - **Settings (Critical):**
     - **General:** Select "Run only when user is logged on" (required for Git credential access).
-    - **Settings:** Set "Stop the task if it runs longer than" to **2 minutes**.
+    - **Settings:** Enable "Stop the task if it runs longer than" (set to **2 minutes** via `/k` in the command above).
     - **Settings:** Enable "If the running task does not end when requested, force it to stop."
 
 
