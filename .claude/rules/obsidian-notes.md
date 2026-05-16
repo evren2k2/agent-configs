@@ -1,7 +1,7 @@
 # Obsidian Vault Rules
 
 ## Context Loading
-At session start, the hook provides only project name + checkpoint headers (~8 lines). For deeper vault context, spawn a subagent (type: Explore) to read working-context.md and related notes. The subagent returns a concise summary (~25 lines) to main context. Do NOT read full vault notes directly in main context — always delegate to subagent.
+At session start, the hook provides the project name, checkpoint headers, and a compact vault project listing (note names + type/status, no bodies). For note **content**, spawn an Explore subagent to read `working-context.md` and 1-2 related notes. The subagent returns a concise summary (~25 lines) to main context. Do NOT read full vault notes directly in main context — always delegate to subagent.
 
 ## Vault Search
 For vault queries, prefer the `vault` CLI (see the `vault-cli` skill) — it returns compact metadata + link summaries from a cached graph index, letting you pick 2-3 notes to Read instead of grepping dozens of files. Default routing:

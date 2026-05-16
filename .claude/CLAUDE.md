@@ -21,12 +21,14 @@ My Obsidian vault is Gemini's persistent memory. When Gemini learns something, m
 
 ## Context Loading (Subagent-Based)
 
-Vault context is loaded via subagents to keep main context clean. The SessionStart hook provides only the project name and checkpoint headers (~8 lines).
+Vault context is loaded via subagents to keep main context clean. The SessionStart hook provides the project name, checkpoint headers, and a compact vault project listing (note names + type/status — no bodies).
 
 **When starting project work or after compaction:**
 1. Map the current repository name to its vault-safe equivalent (lowercase, underscores/spaces to hyphens).
-2. Spawn an Explore subagent with: "Read vault context for project `<mapped-name>`. First run `vault project <mapped-name>` to enumerate notes, then read `~/obsidian_notes/projects/<mapped-name>/working-context.md` and any other 2-3 notes the listing suggests. Return a structured summary: current goal, plan status, key decisions, open items, active files. Keep summary under 25 lines."
+2. **The hook already includes the vault project listing.** You do not need to run `vault project` yourself. Spawn an Explore subagent only when you need note **content**: "Read `~/obsidian_notes/projects/<mapped-name>/working-context.md` and any 1-2 notes flagged in the session hook listing. Return structured summary: current goal, plan status, key decisions, open items. Under 25 lines."
 3. The subagent returns only the summary — main context never ingests full vault notes.
+
+**In plan mode Phase 1:** The vault listing is already in context from the hook. Instruct your first Explore subagent to read `working-context.md` directly (use the path shown in the hook listing).
 
 **When making decisions or planning:** Also spawn subagent to check `~/obsidian_notes/Gemini/open-questions.md`.
 
