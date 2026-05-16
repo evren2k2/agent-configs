@@ -24,3 +24,10 @@
 
 # Ignore OS files
 .DS_Store
+
+# Local files
+**/settings.local.json
+
+# Python cache
+**/__pycache__/
+*.pyc

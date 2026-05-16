@@ -25,17 +25,18 @@ Vault context is loaded via subagents to keep main context clean. The SessionSta
 
 **When starting project work or after compaction:**
 1. Map the current repository name to its vault-safe equivalent (lowercase, underscores/spaces to hyphens).
-2. Spawn an Explore subagent with: "Read vault context for project `<mapped-name>`. Read `~/obsidian_notes/projects/<mapped-name>/working-context.md` (latest checkpoint), search for `project: <mapped-name>` frontmatter to find related notes. Return a structured summary: current goal, plan status, key decisions, open items, active files. Keep summary under 25 lines."
+2. Spawn an Explore subagent with: "Read vault context for project `<mapped-name>`. First run `vault project <mapped-name>` to enumerate notes, then read `~/obsidian_notes/projects/<mapped-name>/working-context.md` and any other 2-3 notes the listing suggests. Return a structured summary: current goal, plan status, key decisions, open items, active files. Keep summary under 25 lines."
 3. The subagent returns only the summary — main context never ingests full vault notes.
 
 **When making decisions or planning:** Also spawn subagent to check `~/obsidian_notes/Gemini/open-questions.md`.
 
-**When you need specific vault info:** Use subagent, not direct Read/Grep of vault files. Exception: if you need a single specific file and know its exact path, direct read is fine.
+**When you need specific vault info:** Prefer the `vault` CLI (see `vault-cli` skill) — `vault find`, `vault links`, `vault show`, `vault project`. It reads the cached graph index instead of grepping files. Use a subagent for noisy queries; direct Read in main context is reserved for a single known-path file.
 
 ## Available Skills
 
 | Skill | When to use |
 |-------|-------------|
+| `vault-cli` | Graph-aware vault navigation (`vault find`, `vault links`, `vault project`, etc.) — preferred for every retrieval that doesn't need full note bodies |
 | `obsidian-notes` | Taking notes, recalling context, building connections, persistent memory |
 | `obsidian-audit` | Vault health checks — after creating 3+ notes, weekly, or on request |
 | `project-archaeology` | Reverse-engineer an existing codebase into trustworthy vault documentation (runs once per project) |

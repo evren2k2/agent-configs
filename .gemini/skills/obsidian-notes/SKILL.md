@@ -176,12 +176,14 @@ Before any `/compact`, save context that would be lost:
 
 ## Retrieval Pattern
 
-When searching the vault for context, use the **Grep tool** (not bash grep) with iterative retrieval:
+Use the **`vault` CLI** (see the `vault-cli` skill) as your primary retrieval interface — it reads a cached graph index instead of grepping the vault.
 
-1. **First pass**: Search by frontmatter — Grep tool with `pattern: "project: <name>"`, `path: ~/obsidian_notes/`, `glob: "*.md"`. Or keyword search with `pattern: "keyword"`.
-2. **Evaluate**: Are results sufficient? Check wikilinks in found notes for related content.
-3. **Follow links**: Read linked notes for deeper context.
-4. **Max 3 cycles** — if not found by then, the vault doesn't have it.
+1. **First pass**: `vault project <name>` for a project map, or `vault find "<concept>"` for keyword/concept search.
+2. **Evaluate**: Scan the result list (title + frontmatter + link counts + snippet). Pick 1-3 candidates.
+3. **Follow links**: `vault links <note>` or `vault neighbors <note> --depth 2` to find adjacent context.
+4. **Read content**: Only Read the 1-3 notes that look most relevant.
+
+Fall back to the **Grep tool** only when you need full-text patterns inside note bodies — the CLI only sees titles, tags, frontmatter, and first paragraphs.
 
 Also check:
 - `agent/session-log.md` — what was done before

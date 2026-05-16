@@ -4,7 +4,14 @@
 At session start, the hook provides only project name + checkpoint headers (~8 lines). For deeper vault context, spawn a subagent (type: Explore) to read working-context.md and related notes. The subagent returns a concise summary (~25 lines) to main context. Do NOT read full vault notes directly in main context — always delegate to subagent.
 
 ## Vault Search
-For vault queries in main context, prefer spawning a subagent to keep context clean. Within subagents, use **mgrep** for semantic search or **Grep** for exact matches. Direct vault reads in main context are acceptable only for single known-path files.
+For vault queries, prefer the `vault` CLI (see the `vault-cli` skill) — it returns compact metadata + link summaries from a cached graph index, letting you pick 2-3 notes to Read instead of grepping dozens of files. Default routing:
+- Concept search → `vault find "<query>"`
+- Project map → `vault project <name>`
+- Frontmatter filter → `vault query --tag X --status Y --type Z`
+- Graph navigation → `vault links <note>`, `vault neighbors <note> --depth 2`
+- Single-note metadata → `vault show <note>`
+
+Fall back to `Grep` only when you need full-text patterns inside note bodies. Spawn a subagent for queries that will produce noisy results — the subagent returns a short summary while the index stays out of main context. Direct Read in main context is only appropriate for a single known-path file.
 
 ## When to Write Notes (Quality Bar)
 Write to the vault only when a future Claude instance would genuinely benefit. Ask: "Would this save significant time or prevent re-discovery in a future session?"

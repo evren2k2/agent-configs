@@ -79,7 +79,11 @@ project: my-project    # required for notes in projects/
 ```
 
 ```bash
-# Check for missing frontmatter
+# Notes with type/status reported as "?" are missing frontmatter (or have malformed
+# frontmatter the indexer couldn't parse).
+vault query --type "?" --json
+vault query --status "?" --json
+# Fallback raw scan:
 for f in $(find ~/obsidian_notes -name "*.md" -not -path "*/.obsidian/*" -not -path "*/.git/*"); do
     if ! head -1 "$f" | grep -q "^---"; then
         echo "MISSING FRONTMATTER: $f"
@@ -110,13 +114,9 @@ A note is orphaned if:
 **This is a flag for review, NOT an automatic fix.** Only add a link if there's a genuine conceptual connection. Standalone reference notes (especially in `library/`) are often legitimately orphaned — they're found by search, not by graph traversal. Do NOT add forced links just to pass the audit.
 
 ```bash
-find ~/obsidian_notes -name "*.md" -not -path "*/.obsidian/*" -not -path "*/.git/*" | while read f; do
-    basename="${f%.md}"
-    basename="${basename##*/}"
-    if ! grep -rl "\[\[$basename\]\]" ~/obsidian_notes/ --include="*.md" | grep -qv "$f"; then
-        echo "ORPHANED: $f"
-    fi
-done
+# Authoritative orphan list (built from the cached graph index):
+vault orphans
+# Use --json to feed into a hygiene script.
 ```
 
 **Flag:** Orphaned notes that should be linked. `inbox/` notes are exempt.

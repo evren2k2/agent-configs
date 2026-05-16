@@ -64,6 +64,24 @@ function Setup-Links($agent) {
 Setup-Links "claude"
 Setup-Links "gemini"
 
+# --- bin/ on PATH for the `vault` CLI ---------------------------------------
+$binDir = Join-Path $REPO_DIR "bin"
+if (Test-Path $binDir) {
+    Write-Host "===> Ensuring $binDir is on User PATH..." -ForegroundColor Cyan
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($userPath -and ($userPath.Split(';') -contains $binDir)) {
+        Write-Host "  [Skipping] $binDir already on User PATH"
+    } else {
+        $newPath = if ($userPath) { "$binDir;$userPath" } else { $binDir }
+        [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+        Write-Host "  [Added] $binDir to User PATH (open a new shell to pick it up)" -ForegroundColor Green
+    }
+    if (-not (Get-Command py -ErrorAction SilentlyContinue) -and `
+        -not (Get-Command python3 -ErrorAction SilentlyContinue)) {
+        Write-Host "  [Warning] Neither 'py' nor 'python3' found. The vault CLI requires Python 3.8+." -ForegroundColor Yellow
+    }
+}
+
 Write-Host "`nDone! Configuration links established." -ForegroundColor Green
 Write-Host "`nNext Step: Setup your Obsidian Vault" -ForegroundColor Cyan
 Write-Host "The configurations expect a vault at: $(Join-Path $HOME "obsidian_notes")"
