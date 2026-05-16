@@ -39,19 +39,11 @@ for CTX in "$VAULT"/projects/*/working-context.md; do
     done < <(grep "^## Checkpoint" "$CTX" 2>/dev/null)
 done
 
-# --- Output (~8 lines) ---
+# --- Output (~4 lines) ---
 echo "Vault: ~/obsidian_notes/"
 if [ -n "$MATCHED_PROJECT" ]; then
-    echo "Project documentation detected: ~/obsidian_notes/projects/$MATCHED_PROJECT"
     echo "CWD project: $MATCHED_PROJECT"
-    VAULT_BIN="$HOME/agent-configs/bin/vault"
-    if [ -f "$VAULT_BIN" ]; then
-        VAULT_LISTING=$(python3 "$VAULT_BIN" project "$MATCHED_PROJECT" 2>/dev/null)
-        [ -n "$VAULT_LISTING" ] && echo "$VAULT_LISTING"
-    fi
+    echo "Action: Use the native 'vault_project' tool to explore this project."
+else
+    echo "Action: Use 'vault_find' or 'vault_project' to locate project context."
 fi
-if [ -n "$CHECKPOINT_LINES" ]; then
-    echo "Checkpoints:"
-    echo -n "$CHECKPOINT_LINES"
-fi
-echo "Vault listing above shows project notes (names + type/status). Spawn Explore subagent for note CONTENT (working-context.md + 1-2 others). In plan mode Phase 1: include reading working-context.md in your first Explore subagent prompt."

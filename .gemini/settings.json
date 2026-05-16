@@ -1,4 +1,13 @@
 {
+  "mcpServers": {
+    "vault-mcp": {
+      "command": "py",
+      "args": [
+        "C:/Users/evren/agent-configs/bin/vault-mcp.py"
+      ],
+      "trust": true
+    }
+  },
   "model": {
     "compressionThreshold": 0.8
   },
