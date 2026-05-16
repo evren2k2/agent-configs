@@ -1,17 +1,32 @@
 # Obsidian Vault Rules
 
 ## Context Loading
-At session start, the hook provides the project name, checkpoint headers, and a compact vault project listing (note names + type/status, no bodies). For note **content**, spawn an Explore subagent to read `working-context.md` and 1-2 related notes. The subagent returns a concise summary (~25 lines) to main context. Do NOT read full vault notes directly in main context — always delegate to subagent.
+At session start, the hook provides the project name and instructs you to use vault MCP tools. Use `vault_project` to enumerate project notes, then spawn an Explore subagent to read the most relevant 2-3 notes. The subagent returns a concise summary (~25 lines) to main context. Do NOT read full vault notes directly in main context.
 
-## Vault Search
-For vault queries, prefer the `vault` CLI (see the `vault-cli` skill) — it returns compact metadata + link summaries from a cached graph index, letting you pick 2-3 notes to Read instead of grepping dozens of files. Default routing:
-- Concept search → `vault find "<query>"`
-- Project map → `vault project <name>`
-- Frontmatter filter → `vault query --tag X --status Y --type Z`
-- Graph navigation → `vault links <note>`, `vault neighbors <note> --depth 2`
-- Single-note metadata → `vault show <note>`
+## Vault Tools (always active — no skill invocation needed)
 
-Fall back to `Grep` only when you need full-text patterns inside note bodies. Spawn a subagent for queries that will produce noisy results — the subagent returns a short summary while the index stays out of main context. Direct Read in main context is only appropriate for a single known-path file.
+Four native MCP tools are registered and pre-approved. You MUST use one before `Read`-ing any vault note.
+
+| Goal | Tool | Key arg |
+|------|------|---------|
+| Find notes about a concept | `vault_find` | `query` |
+| List all notes in a project | `vault_project` | `name` |
+| Inspect a note's metadata + links | `vault_show` | `note` |
+| See who links to/from a note | `vault_links` | `note` |
+
+**Decision tree:**
+- "I need to explore the current project" → `vault_project` first
+- "I'm looking for notes on a topic" → `vault_find` → then `vault_show` on the best hit → then `Read`
+- "I want to see a note's connections" → `vault_links`
+- "I need note body content" → identify it with a vault tool first, then `Read`
+- "I need full-text search inside note bodies" → `Grep` (last resort only)
+
+**Note key format:** lowercase-hyphenated stems. When a stem is ambiguous across projects, qualify it: `brawlstars-ranked-app/working-context`.
+
+**Workflow — bootstrap project context:**
+1. `vault_project(name=<project>)` → compact listing of all notes with status/type
+2. Pick 2-3 notes (usually `working-context.md` + highest-priority items)
+3. `Read` those files only — do not read the whole project folder
 
 ## When to Write Notes (Quality Bar)
 Write to the vault only when a future Claude instance would genuinely benefit. Ask: "Would this save significant time or prevent re-discovery in a future session?"

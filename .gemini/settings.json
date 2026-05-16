@@ -1,10 +1,8 @@
 {
   "mcpServers": {
     "vault-mcp": {
-      "command": "py",
-      "args": [
-        "C:/Users/evren/agent-configs/bin/vault-mcp.py"
-      ],
+      "command": "bash",
+      "args": ["-c", "python3 \"$HOME/agent-configs/bin/vault-mcp.py\""],
       "trust": true
     }
   },

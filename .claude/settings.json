@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Read(~/obsidian_notes/**)",
-      "Write(~/obsidian_notes/**)"
+      "Write(~/obsidian_notes/**)",
+      "Edit(~/obsidian_notes/**)",
+      "mcp__vault-mcp__vault_find",
+      "mcp__vault-mcp__vault_project",
+      "mcp__vault-mcp__vault_show",
+      "mcp__vault-mcp__vault_links"
     ],
     "additionalDirectories": [
       "~/obsidian_notes"
@@ -94,6 +99,16 @@
       }
     ]
   },
+  "advisorModel": "opus",
+  "mcpServers": {
+    "vault-mcp": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "python3 \"$HOME/agent-configs/bin/vault-mcp.py\""
+      ]
+    }
+  },
   "trustedDirectories": [
     "~/obsidian_notes"
   ],
@@ -105,6 +120,5 @@
   "ide": {
     "hasSeenNudge": true,
     "enabled": true
-  },
-  "advisorModel": "opus"
+  }
 }

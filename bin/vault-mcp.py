@@ -51,9 +51,10 @@ class VaultMCPServer:
             return {"error": {"code": -32603, "message": str(e), "data": traceback.format_exc()}}
 
     def on_initialize(self, params):
-        # We don't build the index here to avoid handshake timeouts (3.3s cold start)
+        # Echo client's requested version — makes server compatible with any MCP client version
+        protocol_version = params.get("protocolVersion", "2024-11-05")
         return {
-            "protocolVersion": "2024-11-05",
+            "protocolVersion": protocol_version,
             "capabilities": {
                 "tools": {}
             },
@@ -216,8 +217,12 @@ class VaultMCPServer:
                 continue
             try:
                 request = json.loads(line)
+                # Notifications have no "id" — must not send a response
+                if "id" not in request:
+                    self.handle_request(request)
+                    continue
                 response_data = self.handle_request(request)
-                
+
                 response = {
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
@@ -226,11 +231,16 @@ class VaultMCPServer:
                 if "error" in response_data:
                     response["error"] = response_data.pop("error")
                     del response["result"]
-                
+
                 print(json.dumps(response), flush=True)
             except json.JSONDecodeError:
                 continue
 
 if __name__ == "__main__":
-    server = VaultMCPServer()
-    server.run()
+    try:
+        server = VaultMCPServer()
+        server.run()
+    except Exception as e:
+        print(f"vault-mcp fatal error: {e}", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)

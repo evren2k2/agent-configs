@@ -39,11 +39,11 @@ Vault context is loaded via native MCP tools (`vault_*`) to keep main context cl
 
 | Skill | When to use |
 |-------|-------------|
-| **Native Tools** | Use `vault_find`, `vault_project`, `vault_show`, `vault_links` for all vault navigation. **Do not use shell commands.** |
 | `obsidian-notes` | Taking notes, recalling context, building connections, persistent memory |
 | `obsidian-audit` | Vault health checks — after creating 3+ notes, weekly, or on request |
 | `project-archaeology` | Reverse-engineer an existing codebase into trustworthy vault documentation (runs once per project) |
-| `doc-coauthoring` | Co-authoring documentation, proposals, specs |
+| `architect-interview` | New code architecture, system design, or technical plans — resolves assumptions through an interview before building |
+| `checkpoint` | Context getting heavy, at natural subtask breakpoints, or when explicitly asked — saves working context before compaction |
 
 ## Note Quality Gate
 

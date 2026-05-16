@@ -19,30 +19,33 @@ My Obsidian vault is Gemini's persistent memory. When Gemini learns something, m
 **Conventions:** `YYYY-MM-DD-topic.md` or `topic.md`. Lowercase-hyphenated filenames only. Use `[[wikilinks]]` to connect ideas.
 **Permissions:** Never delete notes without confirming. Prefer appending to overwriting.
 
-## Context Loading (Subagent-Based)
+## Context Loading (Native MCP Tools)
 
-Vault context is loaded via subagents to keep main context clean. The SessionStart hook provides the project name, checkpoint headers, and a compact vault project listing (note names + type/status — no bodies).
+Vault context is loaded via native MCP tools (`vault_*`) to keep main context clean. The SessionStart hook provides the project name and a prompt to use the vault tools.
 
 **When starting project work or after compaction:**
 1. Map the current repository name to its vault-safe equivalent (lowercase, underscores/spaces to hyphens).
-2. **The hook already includes the vault project listing.** You do not need to run `vault project` yourself. Spawn an Explore subagent only when you need note **content**: "Read `~/obsidian_notes/projects/<mapped-name>/working-context.md` and any 1-2 notes flagged in the session hook listing. Return structured summary: current goal, plan status, key decisions, open items. Under 25 lines."
-3. The subagent returns only the summary — main context never ingests full vault notes.
+2. Use the **`vault_project`** tool to enumerate all notes in the project and see their status/type.
+3. Spawn an Explore subagent to read the most relevant 2-3 notes (usually `working-context.md` and high-priority items) and return a structured summary.
+4. The subagent returns only the summary — main context never ingests full vault notes.
 
-**In plan mode Phase 1:** The vault listing is already in context from the hook. Instruct your first Explore subagent to read `working-context.md` directly (use the path shown in the hook listing).
+**When you need specific vault info:** You MUST use the native vault tools. Never use `Read` on a vault note until you have first identified it using a vault tool.
+- **Search concepts** → `vault_find`
+- **Map project** → `vault_project`
+- **Inspect metadata/links** → `vault_show`
+- **Analyze graph** → `vault_links`
 
-**When making decisions or planning:** Also spawn subagent to check `~/obsidian_notes/Gemini/open-questions.md`.
-
-**When you need specific vault info:** Prefer the `vault` CLI (see `vault-cli` skill) — `vault find`, `vault links`, `vault show`, `vault project`. It reads the cached graph index instead of grepping files. Use a subagent for noisy queries; direct Read in main context is reserved for a single known-path file.
+**In plan mode Phase 1:** Use `vault_project` in your first Explore subagent prompt to enumerate project notes, then read `working-context.md` directly.
 
 ## Available Skills
 
 | Skill | When to use |
 |-------|-------------|
-| `vault-cli` | Graph-aware vault navigation (`vault find`, `vault links`, `vault project`, etc.) — preferred for every retrieval that doesn't need full note bodies |
 | `obsidian-notes` | Taking notes, recalling context, building connections, persistent memory |
 | `obsidian-audit` | Vault health checks — after creating 3+ notes, weekly, or on request |
 | `project-archaeology` | Reverse-engineer an existing codebase into trustworthy vault documentation (runs once per project) |
-| `doc-coauthoring` | Co-authoring documentation, proposals, specs |
+| `architect-interview` | New code architecture, system design, or technical plans — resolves assumptions through an interview before building |
+| `checkpoint` | Context getting heavy, at natural subtask breakpoints, or when explicitly asked — saves working context before compaction |
 
 ## Note Quality Gate
 
