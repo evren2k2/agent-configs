@@ -8,11 +8,9 @@ description: Audit the Obsidian vault for organizational health — broken links
 Run this periodically or after large note-creation sessions to ensure the vault stays healthy and useful.
 
 ## When to Run
-- After any session that creates 3+ notes
+- After any session creating 3+ notes, or after a subagent creates vault content
 - Weekly if the vault is actively growing
-- When the user asks to review vault health
-- When sync issues are suspected
-- After a subagent creates vault content (verify it followed conventions)
+- On request, or when sync issues are suspected
 
 ## Audit Checklist
 
@@ -123,11 +121,7 @@ vault orphans
 
 ### 8. Content Quality
 
-Read a sample of notes and check:
-- **Reasoning present**: Does the note explain WHY, not just WHAT?
-- **Tradeoffs documented**: Are alternatives and decisions captured?
-- **Non-obvious insights**: Would this save a future Claude >5 minutes?
-- **Not a README restatement**: Does it add value beyond what's in the source repo?
+Read a sample of notes and check: reasoning present (WHY not just WHAT), tradeoffs documented, non-obvious insights (>5 min saved for future Claude), not a README restatement.
 
 **Flag:** Notes that merely restate source material without adding reasoning or connections.
 
@@ -143,15 +137,7 @@ find ~/obsidian_notes -name "*.md" -not -path "*/.obsidian/*" -not -path "*/.git
 
 ### 10. Stale Content & Inbox Hygiene
 
-Check `agent/session-log.md`:
-- Open items from >2 weeks ago that were never resolved?
-
-Check `agent/open-questions.md`:
-- Questions now answered (in codebase or vault)?
-- Questions no longer relevant?
-
-Check `inbox/`:
-- Items sitting >2 weeks without processing?
+Check `agent/session-log.md` (open items >2 weeks unresolved?), `agent/open-questions.md` (answered or no longer relevant?), `inbox/` (items >2 weeks unprocessed?).
 
 **Flag:** Stale open questions, unprocessed inbox items, outdated log entries.
 

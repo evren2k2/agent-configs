@@ -14,26 +14,21 @@ My Obsidian vault is Gemini's persistent memory. When Gemini learns something, m
 - `areas/` — Durable domain knowledge (promoted from projects when reused)
 - `library/` — Atomic reference notes, papers, tools
 - `personal/` — Goals, journal, personal context
-- `Gemini/` — Agent meta-layer (session log, connections, open questions)
+- `agent/` — Agent meta-layer (session log, connections, open questions)
 
 **Conventions:** `YYYY-MM-DD-topic.md` or `topic.md`. Lowercase-hyphenated filenames only. Use `[[wikilinks]]` to connect ideas.
 **Permissions:** Never delete notes without confirming. Prefer appending to overwriting.
 
 ## Context Loading (Native MCP Tools)
 
-Vault context is loaded via native MCP tools (`vault_*`) to keep main context clean. The SessionStart hook provides the project name, checkpoint headers, and a compact vault project listing.
+The SessionStart hook provides the project name. Use vault MCP tools (`vault_*`) to load context without bloating main context.
 
-**When starting project work or after compaction:**
-1. Map the current repository name to its vault-safe equivalent (lowercase, underscores/spaces to hyphens).
-2. Use the **`vault_project`** tool to enumerate all notes in the project and see their status/type.
-3. Spawn an Explore subagent to read the most relevant 2-3 notes (usually `working-context.md` and high-priority issues) and return a structured summary.
-4. The subagent returns only the summary — main context never ingests full vault notes.
+**Session start workflow:**
+1. Map repo name to vault-safe equivalent (lowercase, underscores/spaces → hyphens).
+2. `vault_project(name=<project>)` → enumerate notes with status/type.
+3. Read 2-3 key notes; never ingest full notes directly into main context.
 
-**When you need specific vault info:** You MUST use the native vault tools. Never use `read_file` on a vault note until you have first identified it using a vault tool.
-- **Search concepts** → `vault_find`
-- **Map project** → `vault_project`
-- **Inspect metadata/links** → `vault_show`
-- **Analyze graph** → `vault_links`
+See `rules/obsidian-notes.md` for the tool decision tree.
 
 ## Available Skills
 
@@ -69,4 +64,4 @@ For high-stakes output (pre-tapeout RTL, verification infrastructure, production
 
 ## Instincts
 
-Learned behavioral patterns live in `~/obsidian_notes/Gemini/instincts.yaml`. Each instinct has a `project:` field (`global` or project name). When a project-scoped instinct is validated at confidence >= 0.8 in 2+ projects, promote it to `project: global`.
+Learned behavioral patterns live in `~/obsidian_notes/agent/instincts.yaml`. Each instinct has a `project:` field (`global` or project name). When a project-scoped instinct is validated at confidence >= 0.8 in 2+ projects, promote it to `project: global`.

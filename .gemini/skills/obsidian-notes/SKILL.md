@@ -32,7 +32,7 @@ The vault is Claude's **external brain** — persistent, cross-session memory wh
 ├── areas/       Durable domain knowledge (promoted from projects/ when reused).
 ├── library/     Atomic reference notes, papers, tools.
 ├── personal/    Goals, journal, personal context.
-└── agent/      Claude's own synthesis, connections, open questions.
+└── agent/       Agent's own synthesis, connections, open questions.
     ├── session-log.md      Running log (append-only)
     ├── open-questions.md   Unresolved questions (append-only)
     ├── connections.md      Cross-domain links (append-only)
@@ -107,10 +107,10 @@ Adapt behavior based on what the user needs:
 Quick notes, minimal processing, inbox-first. Use when the user shares something worth remembering but isn't doing deep work.
 
 ### Synthesis Mode
-Deep reading of existing notes, cross-note connection building, gap identification. Activate when the user asks to "review", "connect", or "synthesize" vault content.
+Deep reading, cross-note connection building, gap identification. Activate when the user asks to "review", "connect", or "synthesize" vault content.
 
 ### Review Mode
-Vault audit, quality checks, cleanup. Load the `obsidian-audit` skill instead.
+Vault audit / quality checks → load the `obsidian-audit` skill instead.
 
 ---
 
@@ -163,37 +163,25 @@ When you notice a reusable pattern, add it. When an instinct proves wrong, lower
 
 ## Pre-Compact Checkpoint
 
-Before any `/compact`, save context that would be lost:
+Before any `/compact`: ensure in-progress notes are written; capture current task state, key paths, and next steps in the session log or a quick `inbox/` note; use a descriptive compact summary (`/compact Focus on implementing X next`).
 
-1. Ensure any in-progress vault notes are written and saved.
-2. If working on a project, note the current task state, key file paths, and next steps in the session log or as a quick `inbox/` note.
-3. Use a descriptive compact summary: `/compact Focus on implementing X next`
-
-**What survives compaction:** CLAUDE.md, tasks, memory files, git state, disk files.
-**What's lost:** Intermediate reasoning, file contents read, conversation history.
+**Survives:** CLAUDE.md, tasks, memory files, git state, disk files. **Lost:** intermediate reasoning, file contents read, conversation history.
 
 ---
 
 ## Retrieval Pattern
 
-Use the **`vault` CLI** (see the `vault-cli` skill) as your primary retrieval interface — it reads a cached graph index instead of grepping the vault.
+Use the native **vault MCP tools** as your primary retrieval interface — they read a cached graph index instead of grepping the vault.
 
-1. **First pass**: `vault project <name>` for a project map, or `vault find "<concept>"` for keyword/concept search.
-2. **Evaluate**: Scan the result list (title + frontmatter + link counts + snippet). Pick 1-3 candidates.
-3. **Follow links**: `vault links <note>` or `vault neighbors <note> --depth 2` to find adjacent context.
-4. **Read content**: Only Read the 1-3 notes that look most relevant.
+1. **First pass**: `vault_project(name=<name>)` for a project map, or `vault_find(query="<concept>")` for keyword/concept search.
+2. **Evaluate**: Scan results (title + frontmatter + link counts + snippet). Pick 1-3 candidates.
+3. **Follow links**: `vault_links(note=<note>)` to find adjacent context.
+4. **Read content**: Only `read_file` the 1-3 notes that look most relevant.
 
-Fall back to the **Grep tool** only when you need full-text patterns inside note bodies — the CLI only sees titles, tags, frontmatter, and first paragraphs.
-
-Also check:
-- `agent/session-log.md` — what was done before
-- `agent/open-questions.md` — unresolved items
+Fall back to **grep** only for full-text patterns inside note bodies. Also check `agent/session-log.md` (past work) and `agent/open-questions.md` (unresolved items).
 
 ---
 
 ## Sync
 
-Cron handles everything. After writing files:
-- No manual push needed — cron runs every 5 min
-- Force immediate sync: `~/obsidian_notes/scripts/server-sync.sh`
-- Check sync log: `tail ~/obsidian_notes/scripts/sync.log`
+Cron auto-commits every 5 min — no manual push needed. Force immediate sync: `~/obsidian_notes/scripts/server-sync.sh`.

@@ -199,14 +199,14 @@ If a note fails any of these, revise it before writing to the vault.
 
 ## Anti-Patterns
 
-- **Do NOT** produce a component inventory. "The project has X, Y, Z" is not archaeology. Archaeology traces how X produces output consumed by Y, which was designed to satisfy requirement Z from the spec.
-- **Do NOT** stop at surface level. If you find a parameter, trace it to its source. If you find a script, understand what it produces and who consumes the output. If you find a design decision, find out why.
-- **Do NOT** write vague connections. "See [[other-note]]" is worthless. "The Timeloop DSE results in [[dse-analysis]] directly determined the PE array parameters used in [[accelerator-architecture#Hardware Architecture]]" is useful.
-- **Do NOT** skip operational knowledge. Every workflow, build process, and tool usage must be documented with enough detail to reproduce.
-- **Do NOT** read every file before understanding the project structure. Surface scan first, then targeted deep dives.
-- **Do NOT** run commands in the original project directory. Everything executes in scratch.
-- **Do NOT** hold all findings in conversation memory. Write to scratch files after each phase/theme.
-- **Do NOT** create a note per source file. Notes are about themes, not files.
-- **Do NOT** include unverified training-data knowledge as if it were project-specific fact.
-- **Do NOT** force exactly N notes. Let project complexity determine the count.
-- **Do NOT** skip Phase 3 verification even if it seems obvious. Trust but verify.
+- **Do NOT** produce a component inventory — trace how X produces output consumed by Y, which satisfies requirement Z from the spec.
+- **Do NOT** stop at surface level — trace every parameter to its source, every script to what produces and consumes it.
+- **Do NOT** write vague connections. "See [[other-note]]" is worthless; explain the actual relationship.
+- **Do NOT** skip operational knowledge — every workflow must be documented with enough detail to reproduce.
+- **Do NOT** read every file before understanding structure — surface scan first, then targeted deep dives.
+- **Do NOT** run commands in the original project directory — everything executes in scratch.
+- **Do NOT** hold findings in conversation memory — write to scratch files after each phase/theme.
+- **Do NOT** create a note per source file — notes are about themes, not files.
+- **Do NOT** include unverified training-data knowledge as project-specific fact.
+- **Do NOT** force exactly N notes — let project complexity determine the count.
+- **Do NOT** skip Phase 3 verification — trust but verify.

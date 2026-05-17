@@ -38,11 +38,7 @@ Write to the vault only when a future Claude instance would genuinely benefit. A
 - Project context was built that would take >5 minutes to reconstruct
 - A decision was made with rationale worth preserving
 
-**Do NOT write a note when:**
-- The interaction was trivial (quick question, simple file edit)
-- The information is already in the codebase, git history, or existing notes
-- The note would just restate what the commit message says
-- It's a one-off debugging session with no reusable insight
+**Do NOT write when:** the interaction was trivial, the info is already in the codebase/git history/existing notes, or there's no reusable insight beyond what the commit message says.
 
 ## Frontmatter (REQUIRED)
 **Every note MUST have YAML frontmatter.** This is non-negotiable. Notes without frontmatter fail audit.
@@ -57,10 +53,10 @@ project: my-project    # optional, groups notes without hub files
 ---
 ```
 
-Exceptions: `README.md`, `claude/session-log.md`, `claude/open-questions.md`, `claude/connections.md`, `claude/pre-compact-snapshot.md` (running logs — use minimal frontmatter with `tags: [claude_util]` instead of full schema).
+Exceptions: `README.md` and `agent/` running logs (`session-log.md`, `open-questions.md`, `connections.md`, `pre-compact-snapshot.md`) — use minimal frontmatter with `tags: [claude_util]` instead of full schema.
 
 ## Claude Utility Tag
-Files that exist solely for Claude's internal use (session logs, snapshots, connections) MUST include `tags: [claude_util]` in their frontmatter. This lets the user filter them from Obsidian's Graph View with `-tag:claude_util`. Apply this tag to any new Claude-only file in `claude/`.
+Files that exist solely for Claude's internal use (session logs, snapshots, connections) MUST include `tags: [claude_util]` in their frontmatter. This lets the user filter them from Obsidian's Graph View with `-tag:claude_util`. Apply this tag to any new Claude-only file in `agent/`.
 
 ## Filename Conventions (REQUIRED)
 - **Lowercase-hyphenated only**: `lab1-loop-optimization.md`, not `Lab1_LoopOptimization.md`
@@ -79,21 +75,20 @@ Every note MUST contain at least one `[[wikilink]]` to a related note. Orphaned 
 **Link to concepts, not parents.** No `_index.md` hub files. Cross-project links are the highest-value connections. A note should link to 1-3 related notes max — forced links degrade signal.
 
 ## Session Log
-Append to `~/obsidian_notes/claude/session-log.md` only at the end of sessions that produced meaningful work. Most sessions should NOT get a log entry. If the session was just a quick Q&A, skip it.
+Append to `~/obsidian_notes/agent/session-log.md` at the end of sessions that produced meaningful work. Skip trivial Q&A sessions.
 
-Use the structured template:
 ```markdown
 ## YYYY-MM-DD
 **Worked on:** [brief description]
 **What worked:** [approaches that succeeded, with evidence]
-**What failed:** [approaches that didn't work, and why — saves future re-discovery]
+**What failed:** [approaches that didn't work, and why]
 **Key decisions:** [decisions made and rationale]
 **Open:** [unresolved items, if any]
 **Connections:** [[note1]] ← [[note2]] [brief description of link]
 ```
 
 ## Connections
-Add to `~/obsidian_notes/claude/connections.md` only when a genuine cross-domain link is discovered — not forced. Include confidence:
+Append to `~/obsidian_notes/agent/connections.md` only for genuine cross-domain links — not forced.
 
 ```markdown
 ## YYYY-MM-DD
@@ -117,4 +112,4 @@ Add to `~/obsidian_notes/claude/connections.md` only when a genuine cross-domain
 - Don't delete old notes — mark them archived so the history is preserved.
 
 ## Content Integrity
-Only include information verified from source code, user input, existing notes, or tool output. Do not interpolate from training data — if unsure whether something is true for this specific project, verify it first or note the uncertainty explicitly.
+Only include information verified from source code, user input, existing notes, or tool output. If unsure, verify first or mark as uncertain — do not interpolate from training data.
