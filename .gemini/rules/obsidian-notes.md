@@ -29,7 +29,7 @@ Four native MCP tools are registered and pre-approved. You MUST use one before `
 3. `read_file` those files only — do not read the whole project folder
 
 ## When to Write Notes (Quality Bar)
-Write to the vault only when a future Claude instance would genuinely benefit. Ask: "Would this save significant time or prevent re-discovery in a future session?"
+Write to the vault only when a future agent instance would genuinely benefit. Ask: "Would this save significant time or prevent re-discovery in a future session?"
 
 **Write a note when:**
 - A non-obvious solution was found (capture the reasoning, not just the fix)
@@ -53,10 +53,10 @@ project: my-project    # optional, groups notes without hub files
 ---
 ```
 
-Exceptions: `README.md` and `agent/` running logs (`session-log.md`, `open-questions.md`, `connections.md`, `pre-compact-snapshot.md`) — use minimal frontmatter with `tags: [claude_util]` instead of full schema.
+Exceptions: `README.md` and `agent/` running logs (`session-log.md`, `open-questions.md`, `connections.md`, `pre-compact-snapshot.md`) — use minimal frontmatter with `tags: [agent_util]` instead of full schema.
 
-## Claude Utility Tag
-Files that exist solely for Claude's internal use (session logs, snapshots, connections) MUST include `tags: [claude_util]` in their frontmatter. This lets the user filter them from Obsidian's Graph View with `-tag:claude_util`. Apply this tag to any new Claude-only file in `agent/`.
+## Agent Utility Tag
+Files that exist solely for Agent's internal use (session logs, snapshots, connections) MUST include `tags: [agent_util]` in their frontmatter. This lets the user filter them from Obsidian's Graph View with `-tag:agent_util`. Apply this tag to any new agent-only file in `agent/`.
 
 ## Filename Conventions (REQUIRED)
 - **Lowercase-hyphenated only**: `lab1-loop-optimization.md`, not `Lab1_LoopOptimization.md`

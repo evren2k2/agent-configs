@@ -2,7 +2,7 @@
 
 ## Identity & Notes Vault
 
-My Obsidian vault is Gemini's persistent memory. When Gemini learns something, makes a connection, solves a problem, or builds context across sessions — it lives here.
+My Obsidian vault is Claude's persistent memory. When Claude learns something, makes a connection, solves a problem, or builds context across sessions — it lives here.
 
 **Vault:** `~/obsidian_notes/` → `git@github.com:evren2k2/obsidian_notes.git`
 **Project Mapping:** Project names from repositories (e.g., `TestOne_Two`) must be mapped to lowercase-hyphenated equivalents (e.g., `testone-two`) for the vault. Always look for project folders in `~/obsidian_notes/projects/<mapped-name>/`.
