@@ -2,7 +2,10 @@
   "mcpServers": {
     "vault-mcp": {
       "command": "bash",
-      "args": ["-c", "python3 \"$HOME/agent-configs/bin/vault-mcp.py\""],
+      "args": [
+        "-c",
+        "S=\"$HOME/agent-configs/bin/vault-mcp.py\"; for P in python3 python py; do command -v \"$P\" >/dev/null 2>&1 && \"$P\" -c \"\" >/dev/null 2>&1 && exec \"$P\" \"$S\"; done; echo \"vault-mcp: no working python in PATH\" >&2; exit 1"
+      ],
       "trust": true
     }
   },
