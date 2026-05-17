@@ -12,7 +12,7 @@ setup_links() {
     mkdir -p "$target_dir"
     
     # Files to link
-    local items=("settings.json" "CLAUDE.md" "GEMINI.md" "rules" "skills")
+    local items=("settings.json" "CLAUDE.md" "GEMINI.md" "rules" "skills" "policies")
     
     for item in "${items[@]}"; do
         local src="$REPO_DIR/.$agent/$item"

@@ -21,7 +21,7 @@ function Setup-Links($agent) {
         New-Item -ItemType Directory -Path $target_dir | Out-Null
     }
     
-    $items = @("settings.json", "CLAUDE.md", "GEMINI.md", "rules", "skills")
+    $items = @("settings.json", "CLAUDE.md", "GEMINI.md", "rules", "skills", "policies")
     
     foreach ($item in $items) {
         $src = Join-Path $REPO_DIR ".$agent\$item"

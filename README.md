@@ -6,6 +6,9 @@ A centralized repository for shared configurations, rules, and skills for **Clau
 
 - `.claude/`: Configuration for Claude Code (`~/.claude/`)
 - `.gemini/`: Configuration for Gemini CLI (`~/.gemini/`)
+  - `rules/`: Custom behavioral rules.
+  - `skills/`: Specialized agent skills.
+  - `policies/`: Custom security and tool-access policies.
 - `hooks/`: Shared shell scripts for session management and vault validation.
 - `setup.*`: Platform-specific setup scripts (Bash or PowerShell) to establish symlinks.
 - `init-vault.*`: Scripts to initialize a fresh Obsidian vault.
@@ -64,6 +67,10 @@ Hooks are now managed within this repository in the `hooks/` directory, making i
 - **Session Lifecycle:** Context loading and cleanup.
 - **Compaction Safety:** State persistence before context compression.
 - **Validation:** Vault integrity checks after file edits.
+
+### Managed Policies
+The repository now manages Gemini CLI policies in `.gemini/policies/`. 
+- **Plan Mode Override:** By default, Plan Mode restricts the agent to built-in read-only tools. A custom policy (`allow-vault-plan.toml`) is included to permit the use of `vault_*` read tools during the planning phase, allowing for graph-aware context retrieval without exiting Plan Mode. Claude controls this via `settings.json`
 
 ## Synchronization (Automation)
 
