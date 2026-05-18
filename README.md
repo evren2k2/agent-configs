@@ -17,6 +17,7 @@ A centralized repository for shared configurations, rules, and skills for **Clau
 
 - **Git:** Required for cloning and version control. **Git Bash** is specifically required on Windows to execute the shell-based hooks.
 - **Node.js & npm:** Required for Claude Code installation and hook execution.
+- **Python 3.8+:** Required for the vault graph engine and MCP server (`vault` CLI / `vault-mcp`). Semantic search (`vault embed` / `vault_semantic_search`) additionally needs the packages in `requirements.txt` (`sentence-transformers`, `numpy`) — the setup script installs them automatically. The core vault tooling works without them.
 - **Obsidian Notes:** The hooks are hardcoded to look for the vault at `~/obsidian_notes` (`C:\Users\<user>\obsidian_notes` on Windows). This folder **must** be placed exactly there for the hooks to function.
 - **Permissions:** 
     - **Linux/macOS:** Standard user permissions are sufficient.

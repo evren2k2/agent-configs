@@ -15,9 +15,11 @@ Subcommands:
   neighbors <note> [--depth N]   BFS k-hop neighborhood
   path <a> <b>                   Shortest wikilink path
   index [--rebuild]              Inspect / rebuild the cached index
+  embed [--rebuild]              (Re-)build the semantic vector store
 
 Index is cached per-vault at $XDG_CACHE_HOME/agent-vault/<hash>/index.json.
-Stdlib only; no external dependencies.
+Core is stdlib-only; the optional `embed` subcommand additionally requires
+sentence-transformers + numpy (see bin/vault_embed.py).
 """
 
 from __future__ import annotations
@@ -33,8 +35,12 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 DEFAULT_VAULT = Path.home() / "obsidian_notes"
+
+# Full note body is cached in the index for lexical search. Capped so a runaway
+# note can't bloat index.json — semantic search (vault_embed) covers long notes.
+BODY_CAP = 16000
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
@@ -168,6 +174,7 @@ def parse_note(path: Path, vault: Path) -> dict | None:
         "frontmatter": fm,
         "_raw_links": raw_links,
         "first_paragraph": first_paragraph(body),
+        "body": body.strip()[:BODY_CAP],
     }
 
 def _parent_folder(rel_path: str) -> str:
@@ -622,7 +629,7 @@ def cmd_find(args, idx):
             "title": tokenize(n.get("title") or ""),
             "tags": [t.lower() for t in (fm.get("tags") or [])],
             "meta": tokenize(" ".join([fm.get("type") or "", fm.get("status") or "", fm.get("project") or ""])),
-            "body": tokenize(n.get("first_paragraph") or ""),
+            "body": tokenize(n.get("body") or n.get("first_paragraph") or ""),
         }
     N = max(1, len(docs))
     df: dict[str, int] = defaultdict(int)
@@ -705,6 +712,38 @@ def cmd_index(args, idx):
     print(f"Backlink edges: {sum(len(v) for v in idx['backlinks'].values())}")
     print(f"Built at:       {idx['built_at']}")
 
+def cmd_embed(args, idx):
+    # Optional feature: lazy-import so the core CLI keeps working without the
+    # semantic-search dependencies installed.
+    bin_dir = str(Path(__file__).parent.absolute())
+    if bin_dir not in sys.path:
+        sys.path.append(bin_dir)
+    try:
+        import vault_embed
+    except ImportError as e:
+        print(f"Semantic search unavailable: {e}", file=sys.stderr)
+        print("Install: python -m pip install -r requirements.txt  (in the agent-configs repo)",
+              file=sys.stderr)
+        return 1
+    model = args.model or vault_embed.DEFAULT_MODEL
+    try:
+        stats = vault_embed.build_vectors(Path(idx["vault_path"]), idx,
+                                          model_name=model, rebuild=args.rebuild)
+    except ImportError as e:
+        # numpy present but sentence-transformers absent — only reached when
+        # notes actually need encoding.
+        print(f"Semantic search unavailable: {e}", file=sys.stderr)
+        print("Install: python -m pip install -r requirements.txt  (in the agent-configs repo)",
+              file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(stats, indent=2))
+        return 0
+    print(f"# embed: {stats['embedded']} re-embedded, {stats['removed']} removed, "
+          f"{stats['unchanged']} unchanged")
+    print(f"  notes: {stats['notes']}  chunks: {stats['chunks']}  model: {stats['model']}")
+    return 0
+
 
 # ----------------------------------------------------------------- main ----
 
@@ -748,6 +787,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("index")
     s.add_argument("--rebuild", action="store_true"); s.add_argument("--json", action="store_true")
+
+    s = sub.add_parser("embed")
+    s.add_argument("--model", default=None, help="Embedding model (default: bge-small-en-v1.5)")
+    s.add_argument("--rebuild", action="store_true", help="Re-embed every note from scratch")
+    s.add_argument("--json", action="store_true")
     return p
 
 
@@ -755,6 +799,7 @@ HANDLERS = {
     "stats": cmd_stats, "project": cmd_project, "tag": cmd_tag, "query": cmd_query,
     "recent": cmd_recent, "orphans": cmd_orphans, "show": cmd_show, "links": cmd_links,
     "neighbors": cmd_neighbors, "path": cmd_path, "find": cmd_find, "index": cmd_index,
+    "embed": cmd_embed,
 }
 
 

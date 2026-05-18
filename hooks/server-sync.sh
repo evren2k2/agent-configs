@@ -30,3 +30,14 @@ git push origin main 2>&1 || {
 }
 
 echo "$(date '+%Y-%m-%d %H:%M'): Sync successful" >> "$LOG_FILE"
+
+# Step 4: refresh the semantic vector store (incremental, best-effort).
+# Hashed change-detection means this is a near-instant no-op when nothing changed.
+VAULT_CLI="$HOME/agent-configs/bin/vault"
+if [ -f "$VAULT_CLI" ]; then
+    for PY in python3 python py; do
+        command -v "$PY" >/dev/null 2>&1 || continue
+        "$PY" "$VAULT_CLI" embed >/dev/null 2>&1 || true
+        break
+    done
+fi

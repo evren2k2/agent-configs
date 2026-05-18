@@ -20,11 +20,11 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
-VAULT_SCRIPT = HERE.parent / "bin" / "vault"
+VAULT_SCRIPT = HERE.parent / "bin" / "vault.py"
 
 
 def _load_vault_module():
-    """Import bin/vault as a module (no .py extension)."""
+    """Import bin/vault.py (the implementation) as a module."""
     from importlib.machinery import SourceFileLoader
     loader = SourceFileLoader("vault_cli", str(VAULT_SCRIPT))
     spec = importlib.util.spec_from_loader("vault_cli", loader)
@@ -311,6 +311,28 @@ class FindRankingTests(unittest.TestCase):
     def test_no_results_empty(self):
         results = self._find("zzz-nonexistent-token")
         self.assertEqual(results, [])
+
+    def test_body_only_token_matches(self):
+        # A token that appears only in a later body paragraph — not in the
+        # title, tags, filename, or first paragraph — must still be found now
+        # that the full note body is indexed (not just first_paragraph).
+        (self.tmp / "areas" / "deep-body.md").write_text(textwrap.dedent("""\
+            ---
+            date: 2026-05-14
+            tags: [misc]
+            type: concept
+            status: active
+            ---
+            # Deep Body
+
+            An unremarkable opening paragraph with ordinary words.
+
+            A later section discusses chiplet interconnect topology.
+            """), encoding="utf-8")
+        self.idx = vault.build_index(self.tmp)
+        results = self._find("chiplet")
+        self.assertTrue(results)
+        self.assertEqual(results[0]["key"], "deep-body")
 
 
 class CommandIntegrationTests(unittest.TestCase):

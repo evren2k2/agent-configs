@@ -1,0 +1,32 @@
+[
+  {
+    "query": "neural network hardware",
+    "expected": ["ai-accelerator-deep-dive", "accelerator-datapath"],
+    "note": "vocab mismatch: notes say 'AI accelerator', not 'neural network'"
+  },
+  {
+    "query": "running large language models locally on my own machine",
+    "expected": ["local-llm-setup"],
+    "note": "vocab mismatch: paraphrase of the note title"
+  },
+  {
+    "query": "detecting unknown signal values in chip simulation",
+    "expected": ["x-state-verification-architecture"],
+    "note": "vocab mismatch: 'unknown values' vs 'X-state'"
+  },
+  {
+    "query": "game tree search for optimal moves",
+    "expected": ["minimax-algorithm"],
+    "note": "vocab mismatch: describes minimax without naming it"
+  },
+  {
+    "query": "verilator",
+    "expected": ["verilator-native-cosimulation"],
+    "note": "exact-token lookup: BM25 should win or tie here"
+  },
+  {
+    "query": "langgraph",
+    "expected": ["langgraph-agent-architecture"],
+    "note": "exact-token lookup: BM25 should win or tie here"
+  }
+]

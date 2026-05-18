@@ -1,0 +1,11 @@
+# Semantic-search dependencies for the vault tooling.
+#
+# Needed only by `vault embed` and the vault_semantic_search MCP tool.
+# The core `vault` CLI and the graph MCP tools (vault_find / vault_project /
+# vault_show / vault_links) work WITHOUT these.
+#
+# Installed by setup.sh / setup.ps1; resolved at runtime by bin/venv_bootstrap.py
+# (cascade: shell Python -> <repo>/.venv -> ~/.venv).
+
+sentence-transformers
+numpy

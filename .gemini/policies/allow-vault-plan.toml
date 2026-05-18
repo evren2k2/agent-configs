@@ -1,6 +1,6 @@
 [[rule]]
 mcpName = "vault-mcp"
-toolName = ["vault_find", "vault_project", "vault_show", "vault_links"]
+toolName = ["vault_find", "vault_semantic_search", "vault_project", "vault_show", "vault_links"]
 decision = "allow"
 priority = 100
 modes = ["plan"]

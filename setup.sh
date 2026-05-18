@@ -68,6 +68,37 @@ if [ -d "$BIN_DIR" ]; then
     fi
 fi
 
+# --- Semantic-search dependencies -------------------------------------------
+# `vault embed` / vault_semantic_search need the packages in requirements.txt
+# (sentence-transformers, numpy). The core vault CLI works without them.
+echo "===> Semantic-search dependencies..."
+REQ_FILE="$REPO_DIR/requirements.txt"
+# Install target follows the cascade venv_bootstrap.py resolves at runtime:
+# the repo venv, then the global venv, then the shell's Python.
+PIP_PY=""
+for venv in "$REPO_DIR/.venv" "$HOME/.venv"; do
+    if [ -x "$venv/bin/python" ]; then PIP_PY="$venv/bin/python"; break; fi
+done
+[ -z "$PIP_PY" ] && PIP_PY="$(command -v python3 || command -v python || true)"
+
+DEPS_PROBE='import importlib.util as u,sys; sys.exit(0 if u.find_spec("sentence_transformers") and u.find_spec("numpy") else 1)'
+if [ -z "$PIP_PY" ]; then
+    echo "  [Warning] no Python found — semantic search will be unavailable."
+elif "$PIP_PY" -c "$DEPS_PROBE" 2>/dev/null; then
+    echo "  [OK] dependencies already present ($PIP_PY)"
+else
+    echo "  Installing into $PIP_PY ..."
+    if "$PIP_PY" -m pip install --quiet -r "$REQ_FILE"; then
+        echo "  [OK] semantic-search dependencies installed"
+    else
+        echo "  [Warning] install failed — semantic search will be unavailable."
+        echo "            Fix your Python setup, then run:"
+        echo "              <python> -m pip install -r \"$REQ_FILE\""
+        echo "            If the system Python is locked, create a venv at"
+        echo "              $REPO_DIR/.venv  (or ~/.venv)  and install there."
+    fi
+fi
+
 echo -e "\nDone! Configuration links established."
 echo -e "\nNext Step: Setup your Obsidian Vault"
 echo "The configurations expect a vault at: $HOME/obsidian_notes"

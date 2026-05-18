@@ -82,6 +82,45 @@ if (Test-Path $binDir) {
     }
 }
 
+# --- Semantic-search dependencies -------------------------------------------
+# `vault embed` / vault_semantic_search need the packages in requirements.txt
+# (sentence-transformers, numpy). The core vault CLI works without them.
+Write-Host "===> Semantic-search dependencies..." -ForegroundColor Cyan
+$reqFile = Join-Path $REPO_DIR "requirements.txt"
+# Install target follows the cascade venv_bootstrap.py resolves at runtime:
+# the repo venv, then the global venv, then the shell's Python.
+$pipPy = $null
+foreach ($venv in @((Join-Path $REPO_DIR ".venv"), (Join-Path $HOME ".venv"))) {
+    $cand = Join-Path $venv "Scripts\python.exe"
+    if (Test-Path $cand) { $pipPy = $cand; break }
+}
+if (-not $pipPy) {
+    foreach ($c in @("py", "python3", "python")) {
+        if (Get-Command $c -ErrorAction SilentlyContinue) { $pipPy = $c; break }
+    }
+}
+$depsProbe = 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("sentence_transformers") and u.find_spec("numpy") else 1)'
+if (-not $pipPy) {
+    Write-Host "  [Warning] no Python found — semantic search will be unavailable." -ForegroundColor Yellow
+} else {
+    & $pipPy -c $depsProbe 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  [OK] dependencies already present ($pipPy)" -ForegroundColor Green
+    } else {
+        Write-Host "  Installing into $pipPy ..."
+        & $pipPy -m pip install --quiet -r $reqFile
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  [OK] semantic-search dependencies installed" -ForegroundColor Green
+        } else {
+            Write-Host "  [Warning] install failed — semantic search will be unavailable." -ForegroundColor Yellow
+            Write-Host "            Fix your Python setup, then run:" -ForegroundColor Yellow
+            Write-Host "              <python> -m pip install -r `"$reqFile`""
+            Write-Host "            If the system Python is locked, create a venv at" -ForegroundColor Yellow
+            Write-Host "              $REPO_DIR\.venv  (or ~\.venv)  and install there."
+        }
+    }
+}
+
 Write-Host "`nDone! Configuration links established." -ForegroundColor Green
 Write-Host "`nNext Step: Setup your Obsidian Vault" -ForegroundColor Cyan
 Write-Host "The configurations expect a vault at: $(Join-Path $HOME "obsidian_notes")"

@@ -5,23 +5,25 @@ At session start, the hook provides the project name and instructs you to use va
 
 ## Vault Tools (always active — no skill invocation needed)
 
-Four native MCP tools are registered and pre-approved. You MUST use one before `Read`-ing any vault note.
+Five native MCP tools are registered and pre-approved. You MUST use one before `Read`-ing any vault note.
 
 | Goal | Tool | Key arg |
 |------|------|---------|
-| Find notes about a concept | `vault_find` | `query` |
+| Find a note by keyword / name (BM25 lexical) | `vault_find` | `query` |
+| Find passages about a concept (semantic) | `vault_semantic_search` | `query` |
 | List all notes in a project | `vault_project` | `name` |
 | Inspect a note's metadata + links | `vault_show` | `note` |
 | See who links to/from a note | `vault_links` | `note` |
 
 **Decision tree:**
 - "I need to explore the current project" → `vault_project` first
-- "I'm looking for notes on a topic" → `vault_find` → then `vault_show` on the best hit → then `Read`
+- "I'm looking for a note by keyword, exact name, or project ID" → `vault_find` → then `vault_show` on the best hit → then `Read`
+- "I'm searching by concept/meaning, or want the exact passages discussing X" → `vault_semantic_search` (returns matching paragraphs with file + line range, across all projects; judge hits by the cosine score)
 - "I want to see a note's connections" → `vault_links`
 - "I need note body content" → identify it with a vault tool first, then `Read`
 - "I need full-text search inside note bodies" → `Grep` (last resort only)
 
-**Note key format:** lowercase-hyphenated stems. When a stem is ambiguous across projects, qualify it: `brawlstars-ranked-app/working-context`.
+**Note key format:** lowercase-hyphenated stems. When a stem is ambiguous across projects, qualify it: `test-project/working-context`.
 
 **Workflow — bootstrap project context:**
 1. `vault_project(name=<project>)` → compact listing of all notes with status/type

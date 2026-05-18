@@ -13,6 +13,10 @@ from pathlib import Path
 BIN_DIR = Path(__file__).parent.absolute()
 if str(BIN_DIR) not in sys.path:
     sys.path.append(str(BIN_DIR))
+
+from venv_bootstrap import ensure_venv
+ensure_venv()  # relaunch under ~/.venv if one exists (semantic-search deps live there)
+
 import vault
 
 def get_vault_root():
@@ -22,6 +26,9 @@ class VaultMCPServer:
     def __init__(self):
         self.vault_path = get_vault_root()
         self.index = None
+        # Semantic search: loaded once per process on first use.
+        self.semantic = None        # (encode, (vectors, meta)) or None
+        self.semantic_tried = False
 
     def ensure_index(self):
         """Lazy-load or refresh the index."""
@@ -112,6 +119,26 @@ class VaultMCPServer:
                         },
                         "required": ["note"]
                     }
+                },
+                {
+                    "name": "vault_semantic_search",
+                    "description": ("Semantic (vector) search over note paragraphs — a "
+                                    "concept-aware grep. Returns the specific passages that "
+                                    "match a concept by meaning, across all projects, each "
+                                    "with its file path and line range. Multiple passages "
+                                    "from the same note may appear. Each hit carries a cosine "
+                                    "`score` (~1.0 strong, <0.3 weak — semantic search always "
+                                    "returns a top-k, so judge by the score). Complements "
+                                    "vault_find (BM25 lexical); prefer vault_find for exact "
+                                    "symbol/name/project-ID lookups."),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Natural-language query / concept"},
+                            "limit": {"type": "integer", "default": 10}
+                        },
+                        "required": ["query"]
+                    }
                 }
             ]
         }
@@ -131,6 +158,8 @@ class VaultMCPServer:
             return self.tool_show(idx, arguments)
         elif name == "vault_links":
             return self.tool_links(idx, arguments)
+        elif name == "vault_semantic_search":
+            return self.tool_semantic_search(idx, arguments)
         else:
             return {"error": {"code": -32601, "message": f"Tool not found: {name}"}}
 
@@ -205,10 +234,55 @@ class VaultMCPServer:
         f = io.StringIO()
         with redirect_stdout(f):
             vault.cmd_links(MockArgs(note), idx)
-        
+
         return {
             "content": [{"type": "text", "text": f.getvalue()}]
         }
+
+    def _ensure_semantic(self):
+        """Load the embedding model + vector store once per process. Returns
+        (encode, store) or None if semantic search is unavailable here."""
+        if not self.semantic_tried:
+            self.semantic_tried = True
+            try:
+                import vault_embed
+                vectors, meta = vault_embed.load_store(self.vault_path)
+                if vectors is not None:
+                    encode = vault_embed.make_encoder(
+                        meta.get("model") or vault_embed.DEFAULT_MODEL)
+                    self.semantic = (encode, (vectors, meta))
+            except Exception as e:
+                print(f"vault-mcp: semantic search disabled — {e}",
+                      file=sys.stderr, flush=True)
+        return self.semantic
+
+    def tool_semantic_search(self, idx, args):
+        query = args.get("query")
+        limit = args.get("limit", 10)
+        if not query:
+            return {"content": [{"type": "text", "text": "Error: 'query' is required."}]}
+        sem = self._ensure_semantic()
+        if sem is None:
+            return {"content": [{"type": "text", "text": (
+                "Semantic search unavailable: the dependencies (see requirements.txt) "
+                "are not installed, or the vector store has not been built "
+                "(run `vault embed`). Fall back to vault_find for this query.")}]}
+        import vault_embed
+        encode, store = sem
+        hits = vault_embed.search(query, k=limit, encode=encode, store=store)
+        results = []
+        for h in hits:
+            n = idx["notes"].get(h["key"])
+            fm = n["frontmatter"] if n else {}
+            results.append({
+                "score": round(h["score"], 4),
+                "path": h["path"],
+                "lines": f'{h["line_start"]}-{h["line_end"]}',
+                "title": n.get("title") if n else None,
+                "project": fm.get("project"),
+                "text": h["text"],
+            })
+        return {"content": [{"type": "text", "text": json.dumps(results, indent=2)}]}
 
     def run(self):
         # Simple JSON-RPC loop over stdio

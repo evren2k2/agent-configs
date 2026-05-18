@@ -8,6 +8,9 @@ BIN_DIR = Path(__file__).parent.absolute()
 if str(BIN_DIR) not in sys.path:
     sys.path.append(str(BIN_DIR))
 
+from venv_bootstrap import ensure_venv
+ensure_venv()  # relaunch under ~/.venv if one exists
+
 import vault
 if __name__ == "__main__":
     sys.exit(vault.main())

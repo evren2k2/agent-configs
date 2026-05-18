@@ -64,4 +64,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 "${timestamp}: Sync successful" | Add-Content $LOG_FILE
+
+# Step 4: refresh the semantic vector store (incremental, best-effort).
+# Hashed change-detection makes this a near-instant no-op when nothing changed.
+$vaultCli = Join-Path $HOME "agent-configs\bin\vault"
+if (Test-Path $vaultCli) {
+    foreach ($py in @("py", "python3", "python")) {
+        if (Get-Command $py -ErrorAction SilentlyContinue) {
+            try { & $py $vaultCli embed *> $null } catch {}
+            break
+        }
+    }
+}
+
 Pop-Location

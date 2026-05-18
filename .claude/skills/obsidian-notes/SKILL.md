@@ -173,7 +173,7 @@ Before any `/compact`: ensure in-progress notes are written; capture current tas
 
 Use the native **vault MCP tools** as your primary retrieval interface — they read a cached graph index instead of grepping the vault.
 
-1. **First pass**: `vault_project(name=<name>)` for a project map, or `vault_find(query="<concept>")` for keyword/concept search.
+1. **First pass**: `vault_project(name=<name>)` for a project map; `vault_find(query="<keyword>")` for keyword/name lookup; `vault_semantic_search(query="<concept>")` to retrieve the exact paragraphs discussing a concept (cross-project, with file + line range).
 2. **Evaluate**: Scan results (title + frontmatter + link counts + snippet). Pick 1-3 candidates.
 3. **Follow links**: `vault_links(note=<note>)` to find adjacent context.
 4. **Read content**: Only `Read` the 1-3 notes that look most relevant.
