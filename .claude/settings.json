@@ -7,7 +7,8 @@
       "mcp__vault-mcp__vault_find",
       "mcp__vault-mcp__vault_project",
       "mcp__vault-mcp__vault_show",
-      "mcp__vault-mcp__vault_links"
+      "mcp__vault-mcp__vault_links",
+      "mcp__vault-vault_semantic_search"
     ],
     "additionalDirectories": [
       "~/obsidian_notes"
