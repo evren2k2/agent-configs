@@ -41,7 +41,7 @@ done
 
 # --- Output (~4 lines) ---
 echo "Vault: ~/obsidian_notes/"
-echo "Vault MCP tools (pre-approved, no prompts): vault_project | vault_find | vault_show | vault_links"
+echo "Vault MCP tools (pre-approved, no prompts): vault_project | vault_semantic_search | vault_find | vault_show | vault_links"
 if [ -n "$MATCHED_PROJECT" ]; then
     echo "CWD project: $MATCHED_PROJECT"
     echo "Action: Call vault_project(name=\"$MATCHED_PROJECT\") to map this project's notes."
