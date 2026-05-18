@@ -239,7 +239,7 @@ class VaultMCPServer:
             "content": [{"type": "text", "text": f.getvalue()}]
         }
 
-    def _ensure_semantic(self):
+    def _ensure_semantic(self, idx):
         """Load the embedding model + vector store once per process. Returns
         (encode, store) or None if semantic search is unavailable here."""
         if not self.semantic_tried:
@@ -247,6 +247,10 @@ class VaultMCPServer:
             try:
                 import vault_embed
                 vectors, meta = vault_embed.load_store(self.vault_path)
+                if vectors is None:
+                    print("vault-mcp: Building vector store...", file=sys.stderr, flush=True)
+                    vault_embed.build_vectors(self.vault_path, idx)
+                    vectors, meta = vault_embed.load_store(self.vault_path)
                 if vectors is not None:
                     encode = vault_embed.make_encoder(
                         meta.get("model") or vault_embed.DEFAULT_MODEL)
@@ -261,7 +265,7 @@ class VaultMCPServer:
         limit = args.get("limit", 10)
         if not query:
             return {"content": [{"type": "text", "text": "Error: 'query' is required."}]}
-        sem = self._ensure_semantic()
+        sem = self._ensure_semantic(idx)
         if sem is None:
             return {"content": [{"type": "text", "text": (
                 "Semantic search unavailable: the dependencies (see requirements.txt) "
