@@ -101,7 +101,7 @@ if (-not $pipPy) {
 }
 $depsProbe = 'import importlib.util as u,sys; sys.exit(0 if u.find_spec("sentence_transformers") and u.find_spec("numpy") else 1)'
 if (-not $pipPy) {
-    Write-Host "  [Warning] no Python found — semantic search will be unavailable." -ForegroundColor Yellow
+    Write-Host "  [Warning] no Python found - semantic search will be unavailable." -ForegroundColor Yellow
 } else {
     & $pipPy -c $depsProbe 2>$null
     if ($LASTEXITCODE -eq 0) {
@@ -112,7 +112,7 @@ if (-not $pipPy) {
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  [OK] semantic-search dependencies installed" -ForegroundColor Green
         } else {
-            Write-Host "  [Warning] install failed — semantic search will be unavailable." -ForegroundColor Yellow
+            Write-Host "  [Warning] install failed - semantic search will be unavailable." -ForegroundColor Yellow
             Write-Host "            Fix your Python setup, then run:" -ForegroundColor Yellow
             Write-Host "              <python> -m pip install -r `"$reqFile`""
             Write-Host "            If the system Python is locked, create a venv at" -ForegroundColor Yellow
