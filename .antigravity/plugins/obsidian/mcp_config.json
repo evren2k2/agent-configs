@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "vault-mcp": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "\"$HOME/agent-configs/bin/vault-mcp-launcher.sh\""
+      ],
+      "trust": true
+    }
+  }
+}

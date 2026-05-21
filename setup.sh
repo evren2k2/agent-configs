@@ -37,6 +37,93 @@ setup_links() {
 setup_links "claude"
 setup_links "gemini"
 
+# --- Antigravity CLI plugins -------------------------------------------------
+# `agy` reads plugins from $HOME/.gemini/antigravity-cli/plugins/<name>/.
+# We symlink each .antigravity/plugins/<name> dir into that location so the
+# antigravity CLI picks up the same skills + hooks + MCP wiring we maintain
+# in this repo, side-by-side with any agy-imported gemini extensions.
+setup_antigravity_plugins() {
+    echo "===> Setting up antigravity plugins..."
+    local src_root="$REPO_DIR/.antigravity/plugins"
+    local dest_root="$HOME/.gemini/antigravity-cli/plugins"
+
+    if [ ! -d "$src_root" ]; then
+        echo "  [Skipping] no .antigravity/plugins directory in repo"
+        return
+    fi
+    mkdir -p "$dest_root"
+
+    for src in "$src_root"/*/; do
+        [ -d "$src" ] || continue
+        local name
+        name="$(basename "$src")"
+        local dest="$dest_root/$name"
+
+        if [ -L "$dest" ]; then
+            echo "  [Skipping] $name (already a link)"
+        elif [ -e "$dest" ]; then
+            echo "  [Backup] Moving existing $name to $name$BACKUP_SUFFIX"
+            mv "$dest" "$dest$BACKUP_SUFFIX"
+            ln -s "${src%/}" "$dest"
+            echo "  [Linking] $name"
+        else
+            echo "  [Linking] $name"
+            ln -s "${src%/}" "$dest"
+        fi
+    done
+
+    # Register plugins in import_manifest.json so `agy plugin list` sees them
+    # and they survive across agy startups. Preserve any pre-existing entries
+    # (e.g. real gemini-cli extensions imported via `agy plugin import gemini`).
+    local manifest_path="$HOME/.gemini/antigravity-cli/import_manifest.json"
+    # Find a Python interpreter that actually executes (Windows has a broken
+    # python3 stub from the Microsoft Store; probe for one that runs).
+    local py=""
+    for cand in python3 python py; do
+        if command -v "$cand" >/dev/null 2>&1 && "$cand" -c "" >/dev/null 2>&1; then
+            py="$cand"
+            break
+        fi
+    done
+    if [ -z "$py" ]; then
+        echo "  [Warning] no working python found - cannot register plugins in import_manifest.json"
+        return
+    fi
+    "$py" - "$manifest_path" <<'PYEOF'
+import json, os, sys, datetime
+path = sys.argv[1]
+repo_plugins = [
+    ("obsidian", ["skills", "mcpServers", "hooks"]),
+    ("general",  ["skills"]),
+]
+try:
+    with open(path, encoding="utf-8") as f:
+        manifest = json.load(f)
+except FileNotFoundError:
+    manifest = {"imports": []}
+if "imports" not in manifest or not isinstance(manifest["imports"], list):
+    manifest["imports"] = []
+existing = {entry.get("name") for entry in manifest["imports"]}
+now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+changed = False
+for name, components in repo_plugins:
+    if name not in existing:
+        manifest["imports"].append({
+            "name": name,
+            "source": "local",
+            "importedAt": now,
+            "components": components,
+        })
+        print(f"  [Registering] {name} in import_manifest.json")
+        changed = True
+if changed:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+PYEOF
+}
+setup_antigravity_plugins
+
 # --- bin/ on PATH for the `vault` CLI ---------------------------------------
 BIN_DIR="$REPO_DIR/bin"
 if [ -d "$BIN_DIR" ]; then
@@ -97,6 +184,40 @@ else
         echo "            If the system Python is locked, create a venv at"
         echo "              $REPO_DIR/.venv  (or ~/.venv)  and install there."
     fi
+fi
+
+# --- Write vault-mcp into ~/.gemini/config/mcp_config.json (agy brain/edit mode) ---
+# agy brain/edit mode reads MCP config from ~/.gemini/config/, not antigravity-cli/.
+# Writing vault-mcp here makes vault tools available without /mcp in the main session.
+echo "===> Registering vault-mcp in ~/.gemini/config/mcp_config.json..."
+GEMINI_CONFIG_MCP="$HOME/.gemini/config/mcp_config.json"
+if [ -z "$PIP_PY" ]; then
+    echo "  [Warning] no Python found - cannot update $GEMINI_CONFIG_MCP"
+else
+    "$PIP_PY" - "$GEMINI_CONFIG_MCP" <<'PYEOF'
+import json, os, sys
+path = sys.argv[1]
+vault_mcp_args = 'S="$HOME/agent-configs/bin/vault-mcp.py"; for P in python3 python py; do command -v "$P" >/dev/null 2>&1 && "$P" -c "" >/dev/null 2>&1 && exec "$P" "$S"; done; echo "vault-mcp: no working python in PATH" >&2; exit 1'
+try:
+    with open(path, encoding="utf-8") as f:
+        config = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    config = {}
+if not isinstance(config.get("mcpServers"), dict):
+    config["mcpServers"] = {}
+if "vault-mcp" not in config["mcpServers"]:
+    config["mcpServers"]["vault-mcp"] = {
+        "command": "bash",
+        "args": ["-c", vault_mcp_args],
+        "trust": True,
+    }
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+    print(f"  [Written] vault-mcp to {path}")
+else:
+    print(f"  [Skipping] vault-mcp already in {path}")
+PYEOF
 fi
 
 echo -e "\nDone! Configuration links established."

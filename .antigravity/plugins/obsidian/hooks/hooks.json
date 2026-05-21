@@ -1,0 +1,66 @@
+{
+  "PreInvocation": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash ~/agent-configs/hooks/session-start.sh",
+          "timeout": 10000
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash ~/agent-configs/hooks/validate-vault-write.sh",
+          "timeout": 5000
+        },
+        {
+          "type": "command",
+          "command": "bash ~/agent-configs/hooks/detect-stale-notes.sh",
+          "timeout": 5000
+        },
+        {
+          "type": "command",
+          "command": "bash ~/agent-configs/hooks/update-timeline.sh",
+          "timeout": 5000
+        }
+      ]
+    },
+    {
+      "matcher": "Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash ~/agent-configs/hooks/validate-vault-write.sh",
+          "timeout": 5000
+        },
+        {
+          "type": "command",
+          "command": "bash ~/agent-configs/hooks/detect-stale-notes.sh",
+          "timeout": 5000
+        },
+        {
+          "type": "command",
+          "command": "bash ~/agent-configs/hooks/update-timeline.sh",
+          "timeout": 5000
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash ~/agent-configs/hooks/session-stop.sh",
+          "timeout": 5000
+        }
+      ]
+    }
+  ]
+}
