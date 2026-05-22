@@ -160,7 +160,7 @@ function Setup-AntigravityPlugins {
         }
     }
     if ($updated) {
-        $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifest_path -Encoding utf8NoBOM
+        [System.IO.File]::WriteAllText($manifest_path, ($manifest | ConvertTo-Json -Depth 10))
     }
 }
 Setup-AntigravityPlugins
@@ -248,10 +248,46 @@ if ($existingServers -notcontains "vault-mcp") {
     $mcpConfig.mcpServers | Add-Member -NotePropertyName "vault-mcp" -NotePropertyValue $entry -Force
     $dir = Split-Path $geminiConfigMcp
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    $mcpConfig | ConvertTo-Json -Depth 10 | Set-Content $geminiConfigMcp -Encoding utf8NoBOM
+    [System.IO.File]::WriteAllText($geminiConfigMcp, ($mcpConfig | ConvertTo-Json -Depth 10))
     Write-Host "  [Written] vault-mcp to $geminiConfigMcp" -ForegroundColor Green
 } else {
     Write-Host "  [Skipping] vault-mcp already in $geminiConfigMcp"
+}
+
+# --- Register vault-mcp at USER scope in ~/.claude.json --------------------
+# Top-level mcpServers in ~/.claude.json makes vault-mcp available in EVERY
+# folder Claude Code is launched in. Without this, vault-mcp only loads
+# inside this repo (via the project-scoped .mcp.json + approval below).
+Write-Host "===> Registering vault-mcp at user scope in ~/.claude.json..." -ForegroundColor Cyan
+$claudeJsonPath = Join-Path $HOME ".claude.json"
+$vaultMcpPyPath = Join-Path $HOME ".agent-configs\bin\vault-mcp.py"
+$userScopeScript = @'
+import json, sys
+path, py_cmd, script = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"  [Warning] could not read {path}: {e}")
+    sys.exit(0)
+servers = data.get("mcpServers")
+if not isinstance(servers, dict):
+    servers = {}
+    data["mcpServers"] = servers
+if "vault-mcp" in servers:
+    print("  [Skipping] vault-mcp already registered at user scope")
+    sys.exit(0)
+servers["vault-mcp"] = {"type": "stdio", "command": py_cmd, "args": [script]}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+print("  [Registered] vault-mcp at user scope (restart Claude Code to load tools)")
+'@
+if (-not $pipPy) {
+    Write-Host "  [Warning] no Python found - cannot update $claudeJsonPath" -ForegroundColor Yellow
+} elseif (-not (Test-Path $claudeJsonPath)) {
+    Write-Host "  [Skipping] $claudeJsonPath does not exist yet. Launch Claude Code once, then re-run setup." -ForegroundColor Yellow
+} else {
+    $userScopeScript | & $pipPy - $claudeJsonPath "python" $vaultMcpPyPath
 }
 
 Write-Host "`nDone! Configuration links established." -ForegroundColor Green

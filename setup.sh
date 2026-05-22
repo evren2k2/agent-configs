@@ -233,6 +233,42 @@ else:
 PYEOF
 fi
 
+CLAUDE_JSON="$HOME/.claude.json"
+VAULT_MCP_PY="$HOME/.agent-configs/bin/vault-mcp.py"
+
+# --- Register vault-mcp at USER scope in ~/.claude.json --------------------
+# Top-level mcpServers in ~/.claude.json makes vault-mcp available in EVERY
+# folder Claude Code is launched in. Without this, vault-mcp only loads
+# inside this repo (via the project-scoped .mcp.json + approval below).
+echo "===> Registering vault-mcp at user scope in ~/.claude.json..."
+if [ -z "$PIP_PY" ]; then
+    echo "  [Warning] no Python found - cannot update $CLAUDE_JSON"
+elif [ ! -f "$CLAUDE_JSON" ]; then
+    echo "  [Skipping] $CLAUDE_JSON does not exist yet. Launch Claude Code once, then re-run setup."
+else
+    "$PIP_PY" - "$CLAUDE_JSON" "$PIP_PY" "$VAULT_MCP_PY" <<'PYEOF'
+import json, sys
+path, py_cmd, script = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"  [Warning] could not read {path}: {e}")
+    sys.exit(0)
+servers = data.get("mcpServers")
+if not isinstance(servers, dict):
+    servers = {}
+    data["mcpServers"] = servers
+if "vault-mcp" in servers:
+    print("  [Skipping] vault-mcp already registered at user scope")
+    sys.exit(0)
+servers["vault-mcp"] = {"type": "stdio", "command": py_cmd, "args": [script]}
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+print("  [Registered] vault-mcp at user scope (restart Claude Code to load tools)")
+PYEOF
+fi
+
 echo -e "\nDone! Configuration links established."
 
 VAULT_PATH="$HOME/obsidian_notes"
