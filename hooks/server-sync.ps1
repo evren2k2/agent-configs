@@ -2,7 +2,7 @@
 # Handles merge conflicts by favoring local changes
 
 $VAULT = Join-Path $HOME "obsidian_notes"
-$LOG_FILE = Join-Path $HOME "agent-configs\hooks\sync.log"
+$LOG_FILE = Join-Path $PSScriptRoot "sync.log"
 
 $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
 "----------------------------------------" | Add-Content $LOG_FILE
@@ -67,7 +67,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Step 4: refresh the semantic vector store (incremental, best-effort).
 # Hashed change-detection makes this a near-instant no-op when nothing changed.
-$vaultCli = Join-Path $HOME "agent-configs\bin\vault"
+$vaultCli = Join-Path (Split-Path $PSScriptRoot -Parent) "bin\vault"
 if (Test-Path $vaultCli) {
     foreach ($py in @("py", "python3", "python")) {
         if (Get-Command $py -ErrorAction SilentlyContinue) {

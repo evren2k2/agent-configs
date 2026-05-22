@@ -37,6 +37,19 @@ setup_links() {
 setup_links "claude"
 setup_links "gemini"
 
+# --- ~/.agent-configs indirection symlink ------------------------------------
+# Hook commands in settings.json reference ~/.agent-configs/hooks/... so the
+# repo can be cloned to any path and still work without regenerating settings.
+echo "===> Ensuring ~/.agent-configs symlink..."
+if [ -L "$HOME/.agent-configs" ]; then
+    echo "  [Skipping] ~/.agent-configs (already a link)"
+elif [ -e "$HOME/.agent-configs" ]; then
+    echo "  [Warning] ~/.agent-configs exists but is not a symlink; skipping."
+else
+    ln -s "$REPO_DIR" "$HOME/.agent-configs"
+    echo "  [Linking] ~/.agent-configs -> $REPO_DIR"
+fi
+
 # --- Antigravity CLI plugins -------------------------------------------------
 # `agy` reads plugins from $HOME/.gemini/antigravity-cli/plugins/<name>/.
 # We symlink each .antigravity/plugins/<name> dir into that location so the
@@ -137,7 +150,7 @@ if [ -d "$BIN_DIR" ]; then
         *) [ -f "$HOME/.bashrc" ] && SHELL_RC="$HOME/.bashrc" ;;
     esac
     if [ -n "$SHELL_RC" ]; then
-        if grep -Fq "agent-configs/bin" "$SHELL_RC" 2>/dev/null; then
+        if grep -Fq "$BIN_DIR" "$SHELL_RC" 2>/dev/null; then
             echo "  [Skipping] PATH entry already in $SHELL_RC"
         else
             echo "" >> "$SHELL_RC"
@@ -197,7 +210,7 @@ else
     "$PIP_PY" - "$GEMINI_CONFIG_MCP" <<'PYEOF'
 import json, os, sys
 path = sys.argv[1]
-vault_mcp_args = 'S="$HOME/agent-configs/bin/vault-mcp.py"; for P in python3 python py; do command -v "$P" >/dev/null 2>&1 && "$P" -c "" >/dev/null 2>&1 && exec "$P" "$S"; done; echo "vault-mcp: no working python in PATH" >&2; exit 1'
+vault_mcp_args = 'S="$HOME/.agent-configs/bin/vault-mcp.py"; for P in python3 python py; do command -v "$P" >/dev/null 2>&1 && "$P" -c "" >/dev/null 2>&1 && exec "$P" "$S"; done; echo "vault-mcp: no working python in PATH" >&2; exit 1'
 try:
     with open(path, encoding="utf-8") as f:
         config = json.load(f)
@@ -221,12 +234,21 @@ PYEOF
 fi
 
 echo -e "\nDone! Configuration links established."
-echo -e "\nNext Step: Setup your Obsidian Vault"
-echo "The configurations expect a vault at: $HOME/obsidian_notes"
-echo ""
-echo "Option A: Clone an existing vault repo:"
-echo "  git clone <your-repo-url> $HOME/obsidian_notes"
-echo ""
-echo "Option B: Initialize a fresh vault:"
-echo "  ./init-vault.sh"
+
+VAULT_PATH="$HOME/obsidian_notes"
+if [ -e "$VAULT_PATH" ]; then
+    echo -e "\n\033[32m[Vault detected] $VAULT_PATH\033[0m"
+else
+    echo -e "\nNext Step: Setup your Obsidian Vault"
+    echo "No vault found at $VAULT_PATH. Choose one of:"
+    echo ""
+    echo "Option A: Clone an existing vault repo:"
+    echo "  git clone <your-repo-url> $VAULT_PATH"
+    echo ""
+    echo "Option B: Link an existing vault from another location:"
+    echo "  ln -s <path-to-your-vault> $VAULT_PATH"
+    echo ""
+    echo "Option C: Initialize a fresh vault:"
+    echo "  ./init-vault.sh"
+fi
 

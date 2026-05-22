@@ -64,6 +64,26 @@ function Setup-Links($agent) {
 Setup-Links "claude"
 Setup-Links "gemini"
 
+# --- ~/.agent-configs indirection symlink -----------------------------------
+# Hook commands in settings.json reference ~/.agent-configs/hooks/... so the
+# repo can be cloned to any path and still work without regenerating settings.
+Write-Host "===> Ensuring ~/.agent-configs symlink..." -ForegroundColor Cyan
+$agentLink = Join-Path $HOME ".agent-configs"
+$agentLinkInfo = Get-Item -Path $agentLink -ErrorAction SilentlyContinue
+if ($null -ne $agentLinkInfo -and $agentLinkInfo.Attributes -match "ReparsePoint") {
+    Write-Host "  [Skipping] ~/.agent-configs (already a link)"
+} elseif (Test-Path $agentLink) {
+    Write-Host "  [Warning] ~/.agent-configs exists but is not a symlink; skipping." -ForegroundColor Yellow
+} else {
+    try {
+        New-Item -ItemType SymbolicLink -Path $agentLink -Target $REPO_DIR -ErrorAction Stop | Out-Null
+        Write-Host "  [Linking] ~/.agent-configs -> $REPO_DIR (SymbolicLink)" -ForegroundColor Green
+    } catch {
+        New-Item -ItemType Junction -Path $agentLink -Target $REPO_DIR | Out-Null
+        Write-Host "  [Linking] ~/.agent-configs -> $REPO_DIR (Junction Fallback)" -ForegroundColor Yellow
+    }
+}
+
 # --- Antigravity CLI plugins -------------------------------------------------
 # `agy` reads plugins from $HOME\.gemini\antigravity-cli\plugins\<name>\.
 # We symlink each .antigravity\plugins\<name> dir into that location so the
@@ -207,7 +227,7 @@ if (-not $pipPy) {
 # Writing vault-mcp here makes vault tools available without /mcp in the main session.
 Write-Host "===> Registering vault-mcp in ~/.gemini/config/mcp_config.json..." -ForegroundColor Cyan
 $geminiConfigMcp = Join-Path $HOME ".gemini\config\mcp_config.json"
-$vaultMcpScript = 'S="$HOME/agent-configs/bin/vault-mcp.py"; for P in python3 python py; do command -v "$P" >/dev/null 2>&1 && "$P" -c "" >/dev/null 2>&1 && exec "$P" "$S"; done; echo "vault-mcp: no working python in PATH" >&2; exit 1'
+$vaultMcpScript = 'S="$HOME/.agent-configs/bin/vault-mcp.py"; for P in python3 python py; do command -v "$P" >/dev/null 2>&1 && "$P" -c "" >/dev/null 2>&1 && exec "$P" "$S"; done; echo "vault-mcp: no working python in PATH" >&2; exit 1'
 $mcpConfig = $null
 if (Test-Path $geminiConfigMcp) {
     $mcpConfig = Get-Content $geminiConfigMcp -Raw | ConvertFrom-Json -ErrorAction SilentlyContinue
@@ -235,12 +255,21 @@ if ($existingServers -notcontains "vault-mcp") {
 }
 
 Write-Host "`nDone! Configuration links established." -ForegroundColor Green
-Write-Host "`nNext Step: Setup your Obsidian Vault" -ForegroundColor Cyan
-Write-Host "The configurations expect a vault at: $(Join-Path $HOME "obsidian_notes")"
-Write-Host ""
-Write-Host "Option A: Clone an existing vault repo:"
-Write-Host "  git clone <your-repo-url> $(Join-Path $HOME "obsidian_notes")"
-Write-Host ""
-Write-Host "Option B: Initialize a fresh vault:"
-Write-Host "  .\init-vault.ps1"
+
+$vaultPath = Join-Path $HOME "obsidian_notes"
+if (Test-Path $vaultPath) {
+    Write-Host "`n[Vault detected] $vaultPath" -ForegroundColor Green
+} else {
+    Write-Host "`nNext Step: Setup your Obsidian Vault" -ForegroundColor Cyan
+    Write-Host "No vault found at $vaultPath. Choose one of:"
+    Write-Host ""
+    Write-Host "Option A: Clone an existing vault repo:"
+    Write-Host "  git clone <your-repo-url> $vaultPath"
+    Write-Host ""
+    Write-Host "Option B: Link an existing vault from another location:"
+    Write-Host "  New-Item -ItemType Junction -Path `"$vaultPath`" -Target `"<path-to-your-vault>`""
+    Write-Host ""
+    Write-Host "Option C: Initialize a fresh vault:"
+    Write-Host "  .\init-vault.ps1"
+}
 

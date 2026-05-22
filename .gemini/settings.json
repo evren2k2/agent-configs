@@ -4,7 +4,7 @@
       "command": "bash",
       "args": [
         "-c",
-        "S=\"$HOME/agent-configs/bin/vault-mcp.py\"; for P in python3 python py; do command -v \"$P\" >/dev/null 2>&1 && \"$P\" -c \"\" >/dev/null 2>&1 && exec \"$P\" \"$S\"; done; echo \"vault-mcp: no working python in PATH\" >&2; exit 1"
+        "S=\"$HOME/.agent-configs/bin/vault-mcp.py\"; for P in python3 python py; do command -v \"$P\" >/dev/null 2>&1 && \"$P\" -c \"\" >/dev/null 2>&1 && exec \"$P\" \"$S\"; done; echo \"vault-mcp: no working python in PATH\" >&2; exit 1"
       ],
       "trust": true
     }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/session-start.sh",
+            "command": "bash ~/.agent-configs/hooks/session-start.sh",
             "timeout": 10000,
             "statusMessage": "Loading vault context..."
           }
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/pre-compact.sh",
+            "command": "bash ~/.agent-configs/hooks/pre-compact.sh",
             "timeout": 10000,
             "statusMessage": "Checking vault state before compression..."
           }
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/session-stop.sh",
+            "command": "bash ~/.agent-configs/hooks/session-stop.sh",
             "timeout": 5000,
             "statusMessage": "Session end check..."
           }
@@ -73,19 +73,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/validate-vault-write.sh",
+            "command": "bash ~/.agent-configs/hooks/validate-vault-write.sh",
             "timeout": 5000,
             "statusMessage": "Validating vault write..."
           },
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/detect-stale-notes.sh",
+            "command": "bash ~/.agent-configs/hooks/detect-stale-notes.sh",
             "timeout": 5000,
             "statusMessage": "Checking for stale vault notes..."
           },
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/update-timeline.sh",
+            "command": "bash ~/.agent-configs/hooks/update-timeline.sh",
             "timeout": 5000,
             "statusMessage": "Updating timeline..."
           }
@@ -96,19 +96,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/validate-vault-write.sh",
+            "command": "bash ~/.agent-configs/hooks/validate-vault-write.sh",
             "timeout": 5000,
             "statusMessage": "Validating vault write..."
           },
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/detect-stale-notes.sh",
+            "command": "bash ~/.agent-configs/hooks/detect-stale-notes.sh",
             "timeout": 5000,
             "statusMessage": "Checking for stale vault notes..."
           },
           {
             "type": "command",
-            "command": "bash ~/agent-configs/hooks/update-timeline.sh",
+            "command": "bash ~/.agent-configs/hooks/update-timeline.sh",
             "timeout": 5000,
             "statusMessage": "Updating timeline..."
           }

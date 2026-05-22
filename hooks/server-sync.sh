@@ -1,8 +1,9 @@
 #!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VAULT="$HOME/obsidian_notes"
 cd "$VAULT" || exit 1
 
-LOG_FILE="$HOME/agent-configs/hooks/sync.log"
+LOG_FILE="$SCRIPT_DIR/sync.log"
 
 # Step 1: Commit local changes FIRST (so pull --rebase has a clean tree)
 if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
@@ -33,7 +34,7 @@ echo "$(date '+%Y-%m-%d %H:%M'): Sync successful" >> "$LOG_FILE"
 
 # Step 4: refresh the semantic vector store (incremental, best-effort).
 # Hashed change-detection means this is a near-instant no-op when nothing changed.
-VAULT_CLI="$HOME/agent-configs/bin/vault"
+VAULT_CLI="$SCRIPT_DIR/../bin/vault"
 if [ -f "$VAULT_CLI" ]; then
     for PY in python3 python py; do
         command -v "$PY" >/dev/null 2>&1 || continue
