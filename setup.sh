@@ -85,55 +85,25 @@ setup_antigravity_plugins() {
         fi
     done
 
-    # Register plugins in import_manifest.json so `agy plugin list` sees them
-    # and they survive across agy startups. Preserve any pre-existing entries
-    # (e.g. real gemini-cli extensions imported via `agy plugin import gemini`).
-    local manifest_path="$HOME/.gemini/antigravity-cli/import_manifest.json"
-    # Find a Python interpreter that actually executes (Windows has a broken
-    # python3 stub from the Microsoft Store; probe for one that runs).
-    local py=""
-    for cand in python3 python py; do
-        if command -v "$cand" >/dev/null 2>&1 && "$cand" -c "" >/dev/null 2>&1; then
-            py="$cand"
-            break
-        fi
-    done
-    if [ -z "$py" ]; then
-        echo "  [Warning] no working python found - cannot register plugins in import_manifest.json"
+    # Register plugins with agy so `agy plugin list` sees them. `agy plugin
+    # install <path>` is idempotent and is the only registration path agy 1.0.2
+    # honors — writing import_manifest.json directly produced entries that
+    # `agy plugin list` ignored. Skip silently if agy isn't on PATH; the
+    # symlinks above are still in place and will be picked up on the next
+    # setup run after agy is installed.
+    if ! command -v agy >/dev/null 2>&1; then
+        echo "  [Notice] agy not on PATH; skipping plugin registration. Re-run setup.sh after installing agy."
         return
     fi
-    "$py" - "$manifest_path" <<'PYEOF'
-import json, os, sys, datetime
-path = sys.argv[1]
-repo_plugins = [
-    ("obsidian", ["skills", "mcpServers", "hooks"]),
-    ("general",  ["skills"]),
-]
-try:
-    with open(path, encoding="utf-8") as f:
-        manifest = json.load(f)
-except FileNotFoundError:
-    manifest = {"imports": []}
-if "imports" not in manifest or not isinstance(manifest["imports"], list):
-    manifest["imports"] = []
-existing = {entry.get("name") for entry in manifest["imports"]}
-now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-changed = False
-for name, components in repo_plugins:
-    if name not in existing:
-        manifest["imports"].append({
-            "name": name,
-            "source": "local",
-            "importedAt": now,
-            "components": components,
-        })
-        print(f"  [Registering] {name} in import_manifest.json")
-        changed = True
-if changed:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2)
-PYEOF
+    for src in "$src_root"/*/; do
+        [ -d "$src" ] || continue
+        local name dest
+        name="$(basename "$src")"
+        dest="$dest_root/$name"
+        echo "  [Registering] $name"
+        agy plugin install "$dest" >/dev/null 2>&1 \
+            || echo "  [Warning] agy plugin install failed for $name"
+    done
 }
 setup_antigravity_plugins
 
@@ -149,6 +119,15 @@ if [ -d "$BIN_DIR" ]; then
         */bash) SHELL_RC="$HOME/.bashrc" ;;
         *) [ -f "$HOME/.bashrc" ] && SHELL_RC="$HOME/.bashrc" ;;
     esac
+    # Some managed-Linux setups (e.g. ECE/Georgia Tech) ship ~/.bashrc as a
+    # symlink to a root-owned system file and source ~/.my-bashrc from it for
+    # user overrides. If the chosen rc exists but isn't writable, fall back to
+    # ~/.my-bashrc (creating it if missing).
+    if [ -n "$SHELL_RC" ] && [ -e "$SHELL_RC" ] && [ ! -w "$SHELL_RC" ]; then
+        echo "  [Notice] $SHELL_RC is not writable; falling back to ~/.my-bashrc"
+        SHELL_RC="$HOME/.my-bashrc"
+        [ -e "$SHELL_RC" ] || : > "$SHELL_RC"
+    fi
     if [ -n "$SHELL_RC" ]; then
         if grep -Fq "$BIN_DIR" "$SHELL_RC" 2>/dev/null; then
             echo "  [Skipping] PATH entry already in $SHELL_RC"
