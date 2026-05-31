@@ -48,3 +48,9 @@ if [ -n "$MATCHED_PROJECT" ]; then
 else
     echo "Action: Use vault_find or vault_project to locate project context."
 fi
+
+# --- Santa Method (surfaced only when a reviewer backend is configured) ---
+SANTA_CONFIG="$HOME/.agent-configs/santa-method.json"
+if [ -f "$SANTA_CONFIG" ] && grep -q '"command"' "$SANTA_CONFIG" 2>/dev/null; then
+    echo "Santa Method: reviewer backend configured. For high-stakes output (RTL, verification infra, production scripts), invoke the santa-method skill and pass both reviewers before shipping."
+fi

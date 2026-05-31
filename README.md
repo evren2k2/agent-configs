@@ -15,6 +15,7 @@ A centralized repository for shared configurations, rules, and skills for **Clau
   - `skills/`: Specialized agent skills.
   - `policies/`: Custom security and tool-access policies.
 - `hooks/`: Shared shell scripts for session management and vault validation. Referenced by both gemini-cli and antigravity hook configs.
+- `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (empty by default — see [Santa Method](#santa-method-optional-adversarial-review)).
 - `setup.*`: Platform-specific setup scripts (Bash or PowerShell) to establish symlinks.
 - `init-vault.*`: Scripts to initialize a fresh Obsidian vault.
 
@@ -96,6 +97,21 @@ Hooks are now managed within this repository in the `hooks/` directory, making i
 The repository now manages Gemini CLI policies in `.gemini/policies/`. 
 - **Plan Mode Override:** By default, Plan Mode restricts the agent to built-in read-only tools. A custom policy (`allow-vault-plan.toml`) is included to permit the use of `vault_*` read tools during the planning phase, allowing for graph-aware context retrieval without exiting Plan Mode. Claude controls this via `settings.json`
 
+### Santa Method (optional adversarial review)
+
+`santa-method` is a skill (mirrored across Claude, Gemini, and Antigravity) that gates high-stakes output — pre-tapeout RTL, verification infra, production scripts — behind two independent reviewers that must both PASS before shipping.
+
+It is **off by default and never surfaced** until you configure a reviewer backend. Reviewers live in the shared `santa-method.json` at the repo root:
+
+```json
+{ "reviewers": [
+  { "name": "codex",
+    "command": "CODEX=\"$(find ~/.claude/plugins/cache/openai-codex -name codex-companion.mjs -print -quit)\" && node \"$CODEX\" adversarial-review --wait --scope working-tree --reasoning-effort=high \"{focus} in {files}\"" }
+] }
+```
+
+While `reviewers` is empty, `session-start.sh` emits nothing about santa and the skill stays dormant. Add one or more entries — the skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command` — to activate it across all three agents at once. See any agent's `santa-method` SKILL.md for the full method (two divergent angles, both-PASS gate, ≤3 iterations).
+
 ### Antigravity CLI plugins
 
 **First-time auth:** agy v1.0.0 requires an interactive login before it will execute prompts (browser-based Google OAuth). Run `agy` once after install, sign in, then `Ctrl+C` to exit. Subsequent invocations (including `-p` print mode) work without prompting.
@@ -118,7 +134,7 @@ Each subdirectory under `.antigravity/plugins/` is a self-contained agy plugin. 
 
 Two plugins ship in this repo:
 - **`obsidian`** — `vault-mcp` server + obsidian-notes / obsidian-audit / project-archaeology / checkpoint / obsidian-vault-rules skills + all session/post-tool hooks
-- **`general`** — architect-interview + behavioral-guidelines skills (no MCP, no hooks)
+- **`general`** — architect-interview + behavioral-guidelines + santa-method skills (no MCP, no hooks)
 
 **Hook event mapping (Antigravity CLI v1.0.0):**
 

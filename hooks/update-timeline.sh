@@ -41,19 +41,21 @@ fi
 # Create timeline file with frontmatter if it doesn't exist
 if [ ! -f "$TIMELINE_FILE" ]; then
     mkdir -p "$(dirname "$TIMELINE_FILE")"
-    cat > "$TIMELINE_FILE" << HEADER
----
-date: $(date '+%Y-%m-%d')
-tags: [claude_util, gemini_util, timeline]
-type: log
-status: active
----
-
-# Project Timeline
-
-Permanent record of all working-context checkpoints. Append-only — never edited.
-
-HEADER
+    {
+        echo "---"
+        echo "date: $(date '+%Y-%m-%d')"
+        echo "tags: [claude_util, gemini_util, timeline]"
+        echo "type: log"
+        echo "status: active"
+        # Genuine project logs carry project: so frontmatter queries find them
+        [ -n "$PROJECT" ] && echo "project: $PROJECT"
+        echo "---"
+        echo ""
+        echo "# Project Timeline"
+        echo ""
+        echo "Permanent record of all working-context checkpoints. Append-only — never edited."
+        echo ""
+    } > "$TIMELINE_FILE"
 fi
 
 # Extract the LAST checkpoint from the current file on disk

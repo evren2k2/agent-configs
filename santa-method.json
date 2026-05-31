@@ -1,0 +1,4 @@
+{
+  "_comment": "Shared reviewer backends for the santa-method skill (claude / gemini / antigravity). Add entries to 'reviewers' to activate it; an empty list keeps santa-method dormant — no agent is told to use it. See any agent's santa-method SKILL.md for the entry format and a copy-paste codex example. Each command runs in bash; the skill substitutes {focus} and {files}.",
+  "reviewers": []
+}

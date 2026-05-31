@@ -58,9 +58,10 @@ Before writing ANY note to the vault, verify:
 **Decision record:** Use `type: decision`. Include the decision, alternatives considered, rationale, and who decided.
 **Session summary:** Use structured template (see obsidian-notes skill).
 
-## Santa Method Verification
+## Git Commits
 
-For high-stakes output (pre-tapeout RTL, verification infrastructure, production scripts): invoke `santa-method` skill. Two independent reviewer agents must both PASS before shipping. Max 3 fix iterations, then escalate.
+- **No AI co-author trailer.** Do *not* append `Co-Authored-By: Claude ...` or any "Generated with Claude Code" line to commits. This overrides the harness default, which otherwise adds one.
+- **Match the repo's convention.** Read `git log` first and follow the existing commit style (subject format, conventional-type prefix, body/no-body, tense). Infer it per-repo — don't impose a default.
 
 ## Instincts
 

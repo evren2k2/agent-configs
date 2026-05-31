@@ -10,10 +10,14 @@
       "mcp__vault-mcp__vault_links",
       "mcp__vault-mcp__vault_semantic_search"
     ],
+    "defaultMode": "auto",
     "additionalDirectories": [
       "~/obsidian_notes"
     ]
   },
+  "enabledMcpjsonServers": [
+    "vault-mcp"
+  ],
   "hooks": {
     "SessionStart": [
       {
@@ -101,9 +105,8 @@
     ]
   },
   "advisorModel": "opus",
-  "enabledMcpjsonServers": [
-    "vault-mcp"
-  ],
+  "theme": "dark",
+  "skipAutoPermissionPrompt": true,
   "trustedDirectories": [
     "~/obsidian_notes"
   ],
