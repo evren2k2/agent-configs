@@ -134,7 +134,7 @@ Each subdirectory under `.antigravity/plugins/` is a self-contained agy plugin. 
 
 Two plugins ship in this repo:
 - **`obsidian`** — `vault-mcp` server + obsidian-notes / obsidian-audit / project-archaeology / checkpoint / obsidian-vault-rules skills + all session/post-tool hooks
-- **`general`** — architect-interview + behavioral-guidelines + santa-method skills (no MCP, no hooks)
+- **`general`** — architect-interview + behavioral-guidelines + paper-outline + santa-method skills (no MCP, no hooks)
 
 **Hook event mapping (Antigravity CLI v1.0.0):**
 
