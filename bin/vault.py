@@ -35,7 +35,7 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
-INDEX_VERSION = 3
+INDEX_VERSION = 4  # 4: deep-collision-safe key assignment (_assign_keys)
 DEFAULT_VAULT = Path.home() / "obsidian_notes"
 
 # Full note body is cached in the index for lexical search. Capped so a runaway
@@ -183,7 +183,12 @@ def _parent_folder(rel_path: str) -> str:
     return normalize_key(parts[-2]) if len(parts) >= 2 else ""
 
 def _assign_keys(files: list[tuple[Path, float, Path]]) -> tuple[dict[Path, str], dict[str, list[str]]]:
-    """Decide a canonical key per file. Qualify with parent folder only on stem collision.
+    """Decide a canonical key per file. Unique stems key bare; colliding stems get
+    qualified with the fewest trailing folder components that make every key unique.
+    This lets projects nest arbitrarily deep without keys colliding — without it, two
+    notes sharing a stem *and* immediate-parent name across branches (e.g.
+    projects/x/impl/v1/spec.md and projects/x/archive/v1/spec.md) would both key to
+    "v1/spec" and one would silently overwrite the other in the index.
     Returns (path -> key) and (bare_stem -> [canonical_keys]) for wikilink resolution.
     """
     by_stem: dict[str, list[tuple[Path, Path]]] = defaultdict(list)
@@ -197,13 +202,28 @@ def _assign_keys(files: list[tuple[Path, float, Path]]) -> tuple[dict[Path, str]
             path, _rel = items[0]
             path_to_key[path] = stem
             stem_to_keys[stem].append(stem)
-        else:
-            for path, rel in items:
-                parts = str(rel).replace("\\", "/").split("/")
-                parent = normalize_key(parts[-2]) if len(parts) >= 2 else ""
-                key = f"{parent}/{stem}" if parent else stem
-                path_to_key[path] = key
-                stem_to_keys[stem].append(key)
+            continue
+        # Collision: normalized folder components per file (filename dropped).
+        folders = [[normalize_key(p) for p in str(rel).replace("\\", "/").split("/")[:-1]]
+                   for _path, rel in items]
+        # Smallest trailing-folder depth that disambiguates. Starting at depth 1 keeps
+        # existing one-level keys (e.g. "foo/working-context") byte-identical.
+        keys = [stem] * len(items)
+        for d in range(1, max((len(f) for f in folders), default=0) + 1):
+            keys = ["/".join(f[-d:] + [stem]) if f else stem for f in folders]
+            if len(set(keys)) == len(keys):
+                break
+        # Pathological: folder paths normalize-identical — append an index to break ties.
+        if len(set(keys)) != len(keys):
+            seen: dict[str, int] = {}
+            deduped = []
+            for k in keys:
+                seen[k] = seen.get(k, 0) + 1
+                deduped.append(k if seen[k] == 1 else f"{k}-{seen[k]}")
+            keys = deduped
+        for (path, _rel), key in zip(items, keys):
+            path_to_key[path] = key
+            stem_to_keys[stem].append(key)
     return path_to_key, stem_to_keys
 
 def _resolve_link(stem: str, folder_hint: str | None, source_folder: str,
@@ -420,6 +440,70 @@ def cmd_stats(args, idx):
     print(f"Top tags:   {top_tags[:5]}")
     print(f"Orphans:    {len(orphans)}")
     print(f"Index:      {out['index_path']}")
+
+def _project_group_key(path: str, name: str, depth: int) -> str:
+    """Group key for a note within a project, capped at `depth` folder levels.
+
+    Notes under projects/<name>/ are keyed by their leading sub-folders relative
+    to the project root (e.g. "logs", "logs/2026" at depth 2). Root-level notes
+    get "(root)"; notes matched only via project: frontmatter but living
+    elsewhere in the vault get "(other)".
+    """
+    prefix = f"projects/{name}/"
+    if not path.startswith(prefix):
+        return "(other)"
+    rel = path[len(prefix):]
+    folders = rel.split("/")[:-1]  # drop the filename
+    key_parts = folders[:max(depth, 0)]
+    return "/".join(key_parts) if key_parts else "(root)"
+
+
+def project_compact(idx: dict, name: str, depth: int = 1) -> dict:
+    """Lean, sub-folder-grouped view of a project for orientation.
+
+    Drops the verbose per-note link lists (keeps in/out counts) and trims
+    frontmatter to type/status/tags. Notes are grouped by sub-folder up to
+    `depth` levels deep. This is what the MCP vault_project tool returns;
+    the CLI `project --json` contract (cmd_project) is unchanged.
+    """
+    fm_keys = set(idx["project_index"].get(name, []))
+    folder_keys = set(idx.get("folder_project_index", {}).get(name, []))
+    keys = sorted(fm_keys | folder_keys)
+
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for k in keys:
+        n = idx["notes"][k]
+        fm = n.get("frontmatter") or {}
+        gk = _project_group_key(n["path"], name, depth)
+        groups[gk].append({
+            "key": k,
+            "path": n["path"],
+            "title": n.get("title"),
+            "type": fm.get("type"),
+            "status": fm.get("status"),
+            "tags": fm.get("tags") or [],
+            "in": len(idx["backlinks"].get(k, [])),
+            "out": len(n["forward_links"]),
+            "frontmatter_project_match": k in fm_keys,  # False => found by folder only
+        })
+
+    # Order: (root) first, named sub-folders alphabetically, (other) last.
+    def group_order(g: str):
+        return (0 if g == "(root)" else 2 if g == "(other)" else 1, g)
+
+    out_groups = []
+    for gk in sorted(groups, key=group_order):
+        notes = sorted(groups[gk], key=lambda d: (d["status"] or "", d["key"]))
+        out_groups.append({"folder": gk, "count": len(notes), "notes": notes})
+
+    return {
+        "project": name,
+        "total": len(keys),
+        "depth": depth,
+        "folder_only_count": len(folder_keys - fm_keys),
+        "groups": out_groups,
+    }
+
 
 def cmd_project(args, idx):
     fm_keys = set(idx["project_index"].get(args.name, []))

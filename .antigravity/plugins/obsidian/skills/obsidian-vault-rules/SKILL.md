@@ -111,7 +111,7 @@ Append to `~/obsidian_notes/agent/connections.md` only for genuine cross-domain 
 - Never use filename prefixes as a substitute for folders.
 - **No `_index.md` hub files.** Project grouping uses `project:` frontmatter. Find notes with the Grep tool: `pattern: "project: <name>"`, `path: ~/obsidian_notes/`, `glob: "*.md"`.
   - **Carve-out for agent/hook files.** `agent_util`-tagged stubs and other hook-generated files are *exempt* from the `project:` requirement — for them, folder location is the grouping, and `vault_project`'s `frontmatter_project_match: false` is informational, not a failure. Genuine project logs (e.g. a project's `timeline.md`) should still carry `project:`.
-- **Max depth**: one level of lifecycle/topic sub-folders within a project is allowed — e.g. `projects/my-project/{logs,decisions,implementation,archive}/note.md`. `projects/my-project/note.md` is also fine. No deeper than that.
+- **Folder depth**: projects may nest sub-folders as deep as needed — the vault tools handle arbitrary depth — but prefer 1–2 levels (e.g. `projects/my-project/{logs,decisions,implementation,archive}/note.md`) for readability and a legible graph. `projects/my-project/note.md` is also fine.
 - **Area promotion**: When a second project needs knowledge from the first, extract the shared concept to `areas/`.
 
 ## Archival

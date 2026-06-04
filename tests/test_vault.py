@@ -417,5 +417,181 @@ class CommandIntegrationTests(unittest.TestCase):
         self.assertEqual(rc, 1)  # not found
 
 
+# ---- project_compact: lean, sub-folder-grouped view (MCP vault_project) ----
+
+def _note(project: str | None = None, status: str = "active", link: str | None = None) -> str:
+    fm = ["---", "date: 2026-05-14", "tags: [misc]", "type: concept", f"status: {status}"]
+    if project:
+        fm.append(f"project: {project}")
+    fm.append("---")
+    body = "# Note\n\nBody."
+    if link:
+        body += f" Links to [[{link}]]."
+    return "\n".join(fm) + "\n" + body + "\n"
+
+
+class ProjectCompactTests(unittest.TestCase):
+    # A project spread across sub-folders, plus a folder-only note (no project: fm)
+    # and a frontmatter-only note living outside the project folder.
+    NOTES = {
+        "projects/qux/working-context.md": _note("qux", link="qux-design"),
+        "projects/qux/qux-design.md": _note("qux"),
+        "projects/qux/logs/log-a.md": _note("qux"),
+        "projects/qux/logs/sub/log-b.md": _note("qux"),
+        "projects/qux/logs/nofm.md": _note(None),          # folder-only (no project:)
+        "projects/qux/archive/old.md": _note("qux", status="archived"),
+        "inbox/qux-stray.md": _note("qux"),                # fm-only, outside folder
+    }
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="vault-compact-"))
+        for rel, content in self.NOTES.items():
+            p = self.tmp / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content, encoding="utf-8")
+        self.cache = Path(tempfile.mkdtemp(prefix="vault-compact-cache-"))
+        self._orig_xdg = os.environ.get("XDG_CACHE_HOME")
+        os.environ["XDG_CACHE_HOME"] = str(self.cache)
+        self.idx = vault.load_index(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+        shutil.rmtree(self.cache, ignore_errors=True)
+        if self._orig_xdg is None:
+            os.environ.pop("XDG_CACHE_HOME", None)
+        else:
+            os.environ["XDG_CACHE_HOME"] = self._orig_xdg
+
+    def _folders(self, result):
+        return [g["folder"] for g in result["groups"]]
+
+    def _group(self, result, folder):
+        return next(g for g in result["groups"] if g["folder"] == folder)
+
+    def test_depth_1_groups_by_immediate_subfolder(self):
+        r = vault.project_compact(self.idx, "qux", depth=1)
+        self.assertEqual(r["project"], "qux")
+        self.assertEqual(r["total"], 7)          # 6 fm | 6 folder, union = 7
+        self.assertEqual(r["folder_only_count"], 1)  # logs/nofm.md
+        # Order: (root) first, named folders alpha, (other) last.
+        self.assertEqual(self._folders(r), ["(root)", "archive", "logs", "(other)"])
+        # Nested logs/sub/log-b rolls up into "logs" at depth 1.
+        log_keys = {n["key"] for n in self._group(r, "logs")["notes"]}
+        self.assertEqual(log_keys, {"log-a", "log-b", "nofm"})
+
+    def test_depth_2_splits_nested_subfolder(self):
+        r = vault.project_compact(self.idx, "qux", depth=2)
+        self.assertIn("logs/sub", self._folders(r))
+        self.assertEqual({n["key"] for n in self._group(r, "logs")["notes"]}, {"log-a", "nofm"})
+        self.assertEqual({n["key"] for n in self._group(r, "logs/sub")["notes"]}, {"log-b"})
+
+    def test_depth_0_flattens(self):
+        r = vault.project_compact(self.idx, "qux", depth=0)
+        # Everything under the project folder collapses to one "(root)" group;
+        # the fm-only stray stays "(other)".
+        self.assertEqual(set(self._folders(r)), {"(root)", "(other)"})
+        self.assertEqual(self._group(r, "(root)")["count"], 6)
+
+    def test_notes_are_lean(self):
+        r = vault.project_compact(self.idx, "qux", depth=1)
+        note = self._group(r, "(root)")["notes"][0]
+        # Counts, not link lists.
+        self.assertNotIn("in_links", note)
+        self.assertNotIn("out_links", note)
+        self.assertIsInstance(note["in"], int)
+        self.assertIsInstance(note["out"], int)
+        # Frontmatter trimmed to type/status/tags (no full frontmatter dict).
+        self.assertNotIn("frontmatter", note)
+        self.assertEqual(set(note), {"key", "path", "title", "type", "status", "tags",
+                                     "in", "out", "frontmatter_project_match"})
+
+    def test_folder_match_and_other_group(self):
+        r = vault.project_compact(self.idx, "qux", depth=1)
+        # Folder-only note has frontmatter_project_match=False; stray fm note lands in "(other)".
+        nofm = next(n for n in self._group(r, "logs")["notes"] if n["key"] == "nofm")
+        self.assertFalse(nofm["frontmatter_project_match"])
+        stray = self._group(r, "(other)")["notes"][0]
+        self.assertEqual(stray["key"], "qux-stray")
+        self.assertTrue(stray["frontmatter_project_match"])
+
+
+# ---- arbitrary-depth project hierarchy: keys stay unique, no notes dropped ----
+
+class DeepHierarchyTests(unittest.TestCase):
+    # Two notes share stem AND immediate-parent ("v1") across different branches —
+    # the case that previously collided to "v1/spec" and dropped a note. Plus a
+    # cross-project stem collision (must stay one-level) and a deeply-nested unique note.
+    NOTES = {
+        "projects/foo/implementation/v1/spec.md": _note("foo", link="working-context"),
+        "projects/foo/archive/v1/spec.md": _note("foo", status="archived", link="working-context"),
+        "projects/foo/working-context.md": _note("foo", link="spec"),
+        "projects/bar/working-context.md": _note("bar", link="spec"),
+        "projects/foo/a/b/c/d/buried.md": _note("foo", link="working-context"),
+    }
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="vault-deep-"))
+        for rel, content in self.NOTES.items():
+            p = self.tmp / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content, encoding="utf-8")
+        self.cache = Path(tempfile.mkdtemp(prefix="vault-deep-cache-"))
+        self._orig_xdg = os.environ.get("XDG_CACHE_HOME")
+        os.environ["XDG_CACHE_HOME"] = str(self.cache)
+        self.idx = vault.load_index(self.tmp)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+        shutil.rmtree(self.cache, ignore_errors=True)
+        if self._orig_xdg is None:
+            os.environ.pop("XDG_CACHE_HOME", None)
+        else:
+            os.environ["XDG_CACHE_HOME"] = self._orig_xdg
+
+    def test_deep_collision_keeps_both_notes(self):
+        # No silent overwrite: every file on disk is in the index.
+        self.assertEqual(len(self.idx["notes"]), len(self.NOTES))
+        self.assertIn("implementation/v1/spec", self.idx["notes"])
+        self.assertIn("archive/v1/spec", self.idx["notes"])
+        paths = {n["path"] for n in self.idx["notes"].values()}
+        self.assertIn("projects/foo/implementation/v1/spec.md", paths)
+        self.assertIn("projects/foo/archive/v1/spec.md", paths)
+
+    def test_disambiguation_is_minimal(self):
+        # Only as many trailing folders as needed (2 here), not the full path.
+        self.assertNotIn("foo/implementation/v1/spec", self.idx["notes"])
+        self.assertNotIn("projects/foo/implementation/v1/spec", self.idx["notes"])
+
+    def test_one_level_keys_unchanged(self):
+        # Backward-compat contract: cross-project stem collisions stay one-level.
+        self.assertIn("foo/working-context", self.idx["notes"])
+        self.assertIn("bar/working-context", self.idx["notes"])
+        self.assertNotIn("working-context", self.idx["notes"])
+
+    def test_deep_unique_note_keyed_bare(self):
+        # A deeply-nested note with a unique stem keys bare and is findable.
+        self.assertIn("buried", self.idx["notes"])
+        self.assertEqual(self.idx["notes"]["buried"]["path"], "projects/foo/a/b/c/d/buried.md")
+
+    def test_deep_notes_grouped_under_project(self):
+        # folder_project_index groups by the top project folder at any depth.
+        folder_keys = set(self.idx["folder_project_index"]["foo"])
+        self.assertIn("buried", folder_keys)
+        self.assertIn("implementation/v1/spec", folder_keys)
+
+    def test_collision_group_uses_uniform_depth(self):
+        # All members of a colliding stem-group share one qualification depth: the
+        # sibling unique at depth 1 ("w2/spec") is still qualified to depth 2, so
+        # _resolve_link's first-component (folder) matching stays valid.
+        v = self.tmp / "_sub"
+        for rel in ("projects/p/a/v1/spec.md", "projects/p/b/v1/spec.md",
+                    "projects/p/c/w2/spec.md"):
+            fp = v / rel
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(_note("p", link="x"), encoding="utf-8")
+        idx = vault.load_index(v)
+        self.assertEqual({"a/v1/spec", "b/v1/spec", "c/w2/spec"}, set(idx["notes"]))
+
+
 if __name__ == "__main__":
     unittest.main()

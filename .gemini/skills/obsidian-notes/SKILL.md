@@ -45,7 +45,7 @@ The vault is Claude's **external brain** — persistent, cross-session memory wh
 - **No `_index.md` hub files.** Project grouping uses `project:` frontmatter. Agents find notes via `grep -r "project: <name>"`.
 - **Do NOT create generic hub filenames** (`Home.md`, `_index.md`, `index.md`). Use descriptive project-prefixed names if a hub is needed (e.g., `ece8893-fpga-overview.md`).
 - **Never** prefix-based flat naming (`projects/proj-arch.md`, `projects/proj-bugs.md`)
-- **Max depth**: 2 levels (`projects/project/note.md`, never deeper)
+- **Folder depth**: nest as deep as needed — the vault tools handle arbitrary depth — but prefer 1–2 levels (e.g. `projects/project/note.md`) for readability
 - **Area promotion**: When a second project needs knowledge from the first, extract the shared concept to `areas/`.
 
 ---

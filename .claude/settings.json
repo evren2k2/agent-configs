@@ -118,5 +118,6 @@
   "ide": {
     "hasSeenNudge": true,
     "enabled": true
-  }
+  },
+  "effortLevel": "xhigh"
 }

@@ -89,11 +89,21 @@ class VaultMCPServer:
                 },
                 {
                     "name": "vault_project",
-                    "description": "List all notes belonging to a specific project.",
+                    "description": ("List notes in a project as a lean, sub-folder-grouped "
+                                    "overview (counts instead of full link lists; frontmatter "
+                                    "trimmed to type/status/tags). Built for orientation: "
+                                    "enumerate, then vault_show / Read the few notes you need."),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "name": {"type": "string", "description": "Project name (e.g. 'brawlstars-ranked-app')"}
+                            "name": {"type": "string", "description": "Project name (e.g. 'brawlstars-ranked-app')"},
+                            "depth": {"type": "integer", "default": 1,
+                                      "description": ("How many sub-folder levels under projects/<name>/ "
+                                                      "to use for grouping. 1 (default) groups by the "
+                                                      "immediate sub-folder (logs, decisions, archive, ...); "
+                                                      "higher descends further; 0 collapses all in-folder notes "
+                                                      "into one '(root)' group (notes matched only by project: "
+                                                      "frontmatter that live outside the folder stay under '(other)').")}
                         },
                         "required": ["name"]
                     }
@@ -188,19 +198,12 @@ class VaultMCPServer:
 
     def tool_project(self, idx, args):
         name = args.get("name")
-        class MockArgs:
-            def __init__(self, n):
-                self.name = n
-                self.json = True
-        
-        import io
-        from contextlib import redirect_stdout
-        f = io.StringIO()
-        with redirect_stdout(f):
-            vault.cmd_project(MockArgs(name), idx)
-        
+        depth = args.get("depth", 1)
+        result = vault.project_compact(idx, name, depth)
+        # Minified: this payload is consumed by the model, so drop indent whitespace
+        # to keep large projects parseable. (The CLI `project` text view is for humans.)
         return {
-            "content": [{"type": "text", "text": f.getvalue()}]
+            "content": [{"type": "text", "text": json.dumps(result, separators=(",", ":"), default=str)}]
         }
 
     def tool_show(self, idx, args):
