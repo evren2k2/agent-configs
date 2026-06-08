@@ -458,13 +458,16 @@ def _project_group_key(path: str, name: str, depth: int) -> str:
     return "/".join(key_parts) if key_parts else "(root)"
 
 
-def project_compact(idx: dict, name: str, depth: int = 1) -> dict:
+def project_compact(idx: dict, name: str, depth: int = 1, expand_archive: bool = False) -> dict:
     """Lean, sub-folder-grouped view of a project for orientation.
 
     Drops the verbose per-note link lists (keeps in/out counts) and trims
     frontmatter to type/status/tags. Notes are grouped by sub-folder up to
-    `depth` levels deep. This is what the MCP vault_project tool returns;
-    the CLI `project --json` contract (cmd_project) is unchanged.
+    `depth` levels deep. The archive/ sub-folder is collapsed to a one-line
+    count ({"folder": "archive", "count": N, "collapsed": true}) unless
+    `expand_archive` is set, since archived notes are rarely needed for
+    orientation. This is what the MCP vault_project tool returns; the CLI
+    `project --json` contract (cmd_project) is unchanged.
     """
     fm_keys = set(idx["project_index"].get(name, []))
     folder_keys = set(idx.get("folder_project_index", {}).get(name, []))
@@ -494,7 +497,11 @@ def project_compact(idx: dict, name: str, depth: int = 1) -> dict:
     out_groups = []
     for gk in sorted(groups, key=group_order):
         notes = sorted(groups[gk], key=lambda d: (d["status"] or "", d["key"]))
-        out_groups.append({"folder": gk, "count": len(notes), "notes": notes})
+        is_archive = gk == "archive" or gk.startswith("archive/")
+        if is_archive and not expand_archive:
+            out_groups.append({"folder": gk, "count": len(notes), "collapsed": True})
+        else:
+            out_groups.append({"folder": gk, "count": len(notes), "notes": notes})
 
     return {
         "project": name,

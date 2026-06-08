@@ -91,8 +91,10 @@ class VaultMCPServer:
                     "name": "vault_project",
                     "description": ("List notes in a project as a lean, sub-folder-grouped "
                                     "overview (counts instead of full link lists; frontmatter "
-                                    "trimmed to type/status/tags). Built for orientation: "
-                                    "enumerate, then vault_show / Read the few notes you need."),
+                                    "trimmed to type/status/tags). The archive/ sub-folder is "
+                                    "collapsed to a count by default — pass expand_archive=true "
+                                    "to list it. Built for orientation: enumerate, then "
+                                    "vault_show / Read the few notes you need."),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -103,7 +105,12 @@ class VaultMCPServer:
                                                       "immediate sub-folder (logs, decisions, archive, ...); "
                                                       "higher descends further; 0 collapses all in-folder notes "
                                                       "into one '(root)' group (notes matched only by project: "
-                                                      "frontmatter that live outside the folder stay under '(other)').")}
+                                                      "frontmatter that live outside the folder stay under '(other)').")},
+                            "expand_archive": {"type": "boolean", "default": False,
+                                               "description": ("By default the archive/ sub-folder is shown as a "
+                                                               "one-line count ({folder, count, collapsed:true}) "
+                                                               "instead of listing every archived note. Set true "
+                                                               "to list the archive/ notes in full.")}
                         },
                         "required": ["name"]
                     }
@@ -199,7 +206,8 @@ class VaultMCPServer:
     def tool_project(self, idx, args):
         name = args.get("name")
         depth = args.get("depth", 1)
-        result = vault.project_compact(idx, name, depth)
+        expand_archive = args.get("expand_archive", False)
+        result = vault.project_compact(idx, name, depth, expand_archive)
         # Minified: this payload is consumed by the model, so drop indent whitespace
         # to keep large projects parseable. (The CLI `project` text view is for humans.)
         return {

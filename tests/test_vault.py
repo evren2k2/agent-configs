@@ -514,6 +514,32 @@ class ProjectCompactTests(unittest.TestCase):
         self.assertEqual(stray["key"], "qux-stray")
         self.assertTrue(stray["frontmatter_project_match"])
 
+    def test_archive_collapsed_by_default(self):
+        r = vault.project_compact(self.idx, "qux", depth=1)
+        arch = self._group(r, "archive")
+        self.assertTrue(arch.get("collapsed"))
+        self.assertEqual(arch["count"], 1)      # old.md counted...
+        self.assertNotIn("notes", arch)         # ...but not enumerated
+
+    def test_expand_archive_lists_notes(self):
+        r = vault.project_compact(self.idx, "qux", depth=1, expand_archive=True)
+        arch = self._group(r, "archive")
+        self.assertNotIn("collapsed", arch)
+        self.assertEqual({n["key"] for n in arch["notes"]}, {"old"})
+
+    def test_archive_collapse_applies_to_nested_archive(self):
+        # archive/<sub> groups (depth > 1) collapse too (folder startswith "archive/").
+        v = self.tmp / "_arch"
+        for rel in ("projects/p/working-context.md", "projects/p/archive/2024/old.md"):
+            fp = v / rel
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(_note("p", status="archived" if "archive" in rel else "active",
+                                link="x"), encoding="utf-8")
+        idx = vault.load_index(v)
+        arch = self._group(vault.project_compact(idx, "p", depth=2), "archive/2024")
+        self.assertTrue(arch.get("collapsed"))
+        self.assertEqual(arch["count"], 1)
+
 
 # ---- arbitrary-depth project hierarchy: keys stay unique, no notes dropped ----
 

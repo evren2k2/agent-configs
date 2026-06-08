@@ -104,6 +104,7 @@
       }
     ]
   },
+  "effortLevel": "xhigh",
   "advisorModel": "opus",
   "theme": "dark",
   "skipAutoPermissionPrompt": true,
@@ -119,5 +120,5 @@
     "hasSeenNudge": true,
     "enabled": true
   },
-  "effortLevel": "xhigh"
+  "skipWorkflowUsageWarning": true
 }
