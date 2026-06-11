@@ -106,6 +106,7 @@
   },
   "effortLevel": "xhigh",
   "advisorModel": "opus",
+  "skipWorkflowUsageWarning": true,
   "theme": "dark",
   "skipAutoPermissionPrompt": true,
   "trustedDirectories": [
@@ -119,6 +120,5 @@
   "ide": {
     "hasSeenNudge": true,
     "enabled": true
-  },
-  "skipWorkflowUsageWarning": true
+  }
 }
