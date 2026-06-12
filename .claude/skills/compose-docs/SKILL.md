@@ -13,8 +13,6 @@ This is the outward-facing sibling of `project-archaeology`. Archaeology mines *
 - If path omitted, use CWD.
 - Output goes to `<repo-root>/docs/` by default. If a `docs/` already exists, update it in place (preserve hand-written content; don't clobber unrelated files).
 
-**Reference exemplar:** the structure and density this skill targets is the `docs/` folder of `psylab_comm` (a hub `README.md` table + one guide per submodule). When in doubt about format, match that.
-
 ## Core Principles
 
 1. **Audience is a user, not a maintainer.** Document what someone needs to *call the API and compose a working pipeline*: signatures, parameters, returns, usage, how pieces fit together. Not internal reasoning, not git history, not "why this default was chosen." If a fact only helps a maintainer, it belongs in `project-archaeology`, not here.
