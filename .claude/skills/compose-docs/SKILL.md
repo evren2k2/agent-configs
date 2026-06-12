@@ -22,8 +22,8 @@ This is the outward-facing sibling of `project-archaeology`. Archaeology mines *
 3. **Theory and conventions are RECONSTRUCTED from the code, never recalled.** This is the defining failure mode of outward docs: derivation/convention/coordinate-system/signal-model sections invite you to write textbook domain knowledge that is *plausible but wrong for THIS code*. A sign convention, normalization, or axis order must match what the code actually computes — derive it from docstrings, comments, the literal computation, and any references the repo cites. If you cannot ground a piece of theory in the source, omit it or mark it explicitly as unverified. Pedagogical completeness is never a license to invent.
 4. **Usage examples are adapted from the repo's own `examples/` and `tests/`, not invented.** These directories usually mirror the submodule layout (`examples/<sub>/`, `tests/<sub>/`). Lift real, working calls from them and trim to a minimal example. Invented snippets are how wrong signatures and impossible argument combinations get into docs. Every example must be runnable.
 5. **Hierarchical, bottom-up composition.** Document leaf units (classes/functions) → compose them into a per-submodule guide → write the hub last so it links guides that already exist. The doc hierarchy mirrors the package hierarchy: hub → submodule guide → class/function reference.
-6. **Public surface only.** Document what users import — respect `__init__.py` / `__all__` / exported names. Private helpers (`_leading_underscore`, internal modules not re-exported) are excluded unless they are part of the public contract.
-7. **Interactions over inventories.** The highest-value sections are "How the classes interact" and "Data/Signal flow" — how a user wires the pieces into a pipeline. A flat list of classes is a failure; show composition, with concrete shapes/types flowing between stages.
+6. **Public surface only.** Document what users import — respect the language's export/visibility mechanism (Python `__init__.py` / `__all__`; JS/TS `export`; Rust `pub`; Go capitalization). Private helpers (Python `_leading_underscore`, unexported names, internal modules not re-exported) are excluded unless they are part of the public contract.
+7. **Interactions over inventories.** The highest-value sections are "How the classes interact" and "Data/Signal flow" — how a user wires the pieces into a pipeline. A flat list of classes is a failure; show composition, with concrete shapes/types flowing between stages. When a flow chart or diagram makes the wiring clearer, render it as **mermaid** (preferred — renders natively on GitHub) or **graphviz/DOT** — never ASCII art or an embedded image.
 8. **One coherent voice.** Every guide follows the same template, tone, and ordering so the set reads as one document. Consistency is a feature.
 
 ## Scratch Workspace
@@ -31,7 +31,7 @@ This is the outward-facing sibling of `project-archaeology`. Archaeology mines *
 Create scratch files at `/tmp/compose-docs-<module-name>-<timestamp>/` for phase findings — this survives context compaction on multi-submodule packages.
 
 - **Read source read-only in place.** Unlike archaeology, do NOT clone the repo: this skill reads source read-only, runs read-only examples/tests, and writes docs into the repo deliberately. The clone ceremony does not apply.
-- If running examples/tests needs isolation (dependency installs), use the project's venv or a fresh one — don't mutate global state.
+- If running examples/tests needs isolation (dependency installs), use the project's isolated environment (e.g. a Python venv, a local `node_modules`) or a fresh one — don't mutate global state.
 - Scratch holds `phase1-map.md` and `phase2-<submodule>.md` findings, not the final docs.
 - **Cleanup:** on success (all guides written, examples verified), delete scratch. On failure or interruption, preserve scratch and print its location.
 
@@ -41,10 +41,10 @@ Create scratch files at `/tmp/compose-docs-<module-name>-<timestamp>/` for phase
 
 **Steps:**
 1. Create scratch workspace.
-2. Read the entry points: root `README.md`, `pyproject.toml`/`setup.py`, and the top-level `__init__.py`. These define the public surface, the install/quickstart (which guides link to, never duplicate), and the package metadata (name, version).
-3. Enumerate submodules — the hierarchy. For a package, each subpackage (`src/<pkg>/<sub>/`) is a candidate guide. Read each submodule's `__init__.py` to get its *exported* names.
+2. Read the entry points: root `README.md`, the project manifest (Python `pyproject.toml`/`setup.py`; or `package.json`, `Cargo.toml`, `go.mod`, …), and the package's top-level export point (Python `__init__.py`; or `index.ts`, `lib.rs`, …). These define the public surface, the install/quickstart (which guides link to, never duplicate), and the package metadata (name, version). **Identify the language and its conventions here** — they fix the export mechanism, test runner + invocation, and example/test layout used throughout the rest of this skill (the steps below show Python as the worked example).
+3. Enumerate submodules — the hierarchy. Each subpackage / source subdirectory (e.g. Python `src/<pkg>/<sub>/`) is a candidate guide. Read each submodule's export point (Python `__init__.py`; or the module's index / `mod.rs` / exported names) to get its *exported* names.
 4. For each submodule, list its public classes and free functions (names only at this stage). Note where `examples/<sub>/` and `tests/<sub>/` exist — these feed Phase 2/3.
-5. Sketch the cross-submodule relationships: which submodule's output feeds which other's input, and the overall end-to-end flow. This becomes the hub's framing and each guide's "How it interacts" section.
+5. Sketch the cross-submodule relationships: which submodule's output feeds which other's input, and the overall end-to-end flow. This becomes the hub's framing and each guide's "How it interacts" section; any flow chart you render from it ships as mermaid or graphviz (Principle 7).
 6. Decide the guide breakdown:
    - One guide per substantial submodule (the common case).
    - Group tiny/closely-related submodules into one guide only if each is too thin to stand alone.
@@ -52,6 +52,7 @@ Create scratch files at `/tmp/compose-docs-<module-name>-<timestamp>/` for phase
 7. Plan the hub: one row per guide, each a *dense* one-line description naming the key classes and their distinguishing capabilities (e.g. `GSCBF (LMS tracking, alpha codebook)`, not `beamforming class`).
 
 **Output:** `scratch/phase1-map.md`:
+- Language & toolchain: export mechanism, test runner + invocation, example/test layout
 - Public surface (top-level exports), package name + version
 - Submodule list with exported classes/functions each
 - Cross-submodule flow sketch
@@ -64,13 +65,13 @@ Create scratch files at `/tmp/compose-docs-<module-name>-<timestamp>/` for phase
 
 For each submodule, read every public class/function's source and capture:
 
-**a. Exact API.** For each class: the constructor signature verbatim; a constructor-parameters table (name, type, default, one-line description); properties split into read/write vs read-only; a methods table (signature/name, return type, one-line description). For each free function: signature with types and the return type, parameters, what it returns. Copy defaults and types from the code — do not paraphrase them.
+**a. Exact API.** For each class: the constructor signature verbatim; a constructor-parameters table (name, type, default, one-line description); properties split into read/write vs read-only; a methods table (signature/name, return type, one-line description). For each free function: signature with types and the return type, parameters, what it returns. Copy defaults and types from the code — do not paraphrase them. For non-OOP languages, map class/constructor/properties/methods to the language's equivalents (see **Language Adaptation** below); the copy-don't-paraphrase rule holds regardless.
 
 **b. Theory / conventions the user needs — grounded in the code (Principle 3).** Only the parts a *caller* must know to use the API correctly: signal models, derivations of a computed quantity, coordinate systems, sign/axis/normalization conventions, units, array-shape conventions, edge-case scenarios. Reconstruct each from the actual computation, docstrings, comments, and repo-cited references. If the code doesn't justify a claim, drop it.
 
 **c. Intra-submodule interaction.** How the classes in this submodule compose — which produces input for which, what's decoupled on purpose, the order of operations.
 
-**d. Typical usage.** Locate the real example(s) in `examples/<sub>/` and the tests in `tests/<sub>/`. Extract minimal working call sequences. Capture distinct workflows as separate variants (a)/(b)/(c) when the submodule supports meaningfully different modes. Note the exact pytest invocation that runs this submodule's tests.
+**d. Typical usage.** Locate the real example(s) in `examples/<sub>/` and the tests in `tests/<sub>/`. Extract minimal working call sequences. Capture distinct workflows as separate variants (a)/(b)/(c) when the submodule supports meaningfully different modes. Note the exact test command that runs this submodule's tests (e.g. `pytest tests/<sub>/`, `npm test`, `cargo test`, `go test ./...`).
 
 Write each submodule's findings to `scratch/phase2-<submodule>.md` as you finish it (compaction safety). The section menu — what a guide may contain — is in **Guide Template** below; not every section applies to every submodule.
 
@@ -167,12 +168,22 @@ For each free function (function-heavy submodules):
 <description, parameters, what it returns — types from the signature>
 
 ## 4. How the Classes Interact
-Prose (and a small inline diagram if it helps): which class produces input for which,
-ordering constraints, what's decoupled. Cross-link other guides for cross-submodule flow.
+Prose — which class produces input for which, ordering constraints, what's decoupled.
+Add a small diagram only if it clarifies the wiring; when you do, render it as mermaid
+(preferred) or graphviz/DOT, never ASCII art:
+
+```mermaid
+flowchart LR
+  Source --> Encoder --> Channel
+```
+
+Cross-link other guides for cross-submodule flow.
 
 ## 5. <Data Flow / Signal Flow>   (optional)
 Step-by-step pipeline: input → stage → ... → output, with the concrete shapes/types/units
-at each hop. This is the most valuable section for pipeline submodules.
+at each hop. This is the most valuable section for pipeline submodules. A mermaid (or
+graphviz) diagram of the pipeline pairs well with the prose — keep the per-hop
+shapes/types/units in text so they stay greppable.
 
 ## 6. Typical Usage
 Runnable code blocks adapted from `examples/` / `tests/`. Use lettered variants for
@@ -188,6 +199,7 @@ distinct modes:
 ```
 
 ## 7. Running Tests
+The project's test command for this submodule (Python shown; use the toolchain from Phase 1):
 ```bash
 python -m pytest tests/<submodule>/ -v
 ```
@@ -196,7 +208,12 @@ python -m pytest tests/<submodule>/ -v
 Papers/specs the implementation cites — only those actually referenced in the source.
 ```
 
-**Non-Python note:** "Class Reference" generalizes to "API Reference" — map constructor/properties/methods to the language's equivalents (e.g. struct + functions, type + methods). The hub/guide hierarchy is language-agnostic.
+**Language Adaptation:** The template above is written with a Python/OOP package as the worked example, but the skill is language-agnostic — the hub→guide→reference hierarchy and the source-grounded discipline carry over unchanged. Adapt the surface to the language detected in Phase 1:
+
+- **"Class Reference" → "API Reference"** for function-heavy or non-OOP code. Map constructor/properties/methods to the language's equivalents: Go/C struct + free functions, Rust type + `impl` methods + traits, a functional module's exported functions + types. Drop the property tables entirely where the concept doesn't exist — a single "Functions" or "Types" table is the right shape for procedural/functional code.
+- **Export/visibility, manifest, test command, and code-fence language** all follow Phase 1's detected toolchain — not the Python defaults shown above.
+
+Pick one coherent shape per project and hold it across every guide, even where it differs from this Python exemplar.
 
 ## Hub Template
 
@@ -228,5 +245,6 @@ Hub descriptions must be **dense** — name the key classes and what makes each 
 - **Do NOT duplicate the root README's install/quickstart** in every guide — link to it.
 - **Do NOT write the hub before the guides** — compose bottom-up so the hub only links guides that exist.
 - **Do NOT ship an unverified example** — if it can't run, fix it or mark its precondition.
+- **Do NOT draw diagrams as ASCII art or embed images** — express every flow chart / diagram as mermaid (preferred, GitHub-native) or graphviz/DOT so it stays source-diffable and renders inline.
 - **Do NOT clobber hand-written docs** when updating an existing `docs/` folder.
 ```
