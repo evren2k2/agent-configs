@@ -16,6 +16,7 @@ Per-item dir symlinks stay LIVE (edit the repo -> active everywhere, no re-sync)
   agentcfg install   [--apply]    dry-run unless --apply
   agentcfg update    [--apply]    re-sync merged files + dir items (idempotent)
   agentcfg uninstall [--apply]    remove our block/keys/links; restore .orig backups
+  agentcfg init-vault [--apply]   create a fresh ~/obsidian_notes vault (dirs + git repo)
 """
 from __future__ import annotations
 import json, os, shutil, subprocess, sys
@@ -38,6 +39,7 @@ VAULT_LAUNCHER = ('S="$HOME/.agent-configs/bin/vault-mcp.py"; for P in python3 p
 COPY = ("--copy" in sys.argv) or (os.name == "nt")
 MANIFEST = HOME / ".agent-configs-installed.json"   # tracks copy-placed paths for clean uninstall
 REQUIREMENTS = REPO / "requirements.txt"
+VAULT = HOME / "obsidian_notes"
 
 AGENTS = ["claude", "gemini"]
 MD_FILES = [(REPO / ".claude/CLAUDE.md", HOME / ".claude/CLAUDE.md"),
@@ -420,12 +422,44 @@ def _add_path():
     with rc.open("a", encoding="utf-8") as f:
         f.write(f"\n{PATH_MARKER}\nexport PATH=\"{BIN_DIR}:$PATH\"\n")
 
+_VAULT_README = """# Obsidian Notes
+
+This is your agent-managed Obsidian vault.
+
+## Structure
+- `areas/`: Thematic folders for notes.
+- `agent/`: Context and metadata managed by your CLI agents.
+- `.obsidian/`: Obsidian configuration.
+"""
+_VAULT_GITIGNORE = ".obsidian/workspace\n.obsidian/workspace.json\n.obsidian/cache/\n*.tmp\n"
+_VAULT_DIRS = [".obsidian", "inbox", "projects", "areas", "library", "personal", "agent"]
+
+def cmd_init_vault(apply):
+    print(f"agent-configs init-vault ({'APPLYING' if apply else 'dry-run — pass --apply'})\n")
+    if VAULT.exists():
+        print(c(f"  {VAULT} already exists — refusing to clobber. Move/delete it to init fresh.", "warn"))
+        return
+    for d in _VAULT_DIRS:
+        _do(apply, f"mkdir {VAULT/d}", lambda d=d: (VAULT/d).mkdir(parents=True, exist_ok=True))
+    _do(apply, f"write {VAULT/'README.md'}", lambda: (VAULT/"README.md").write_text(_VAULT_README, encoding="utf-8"))
+    _do(apply, f"write {VAULT/'.gitignore'}", lambda: (VAULT/".gitignore").write_text(_VAULT_GITIGNORE, encoding="utf-8"))
+    _do(apply, "git init + initial commit", _git_init_vault)
+    if apply:
+        print("\nNext: create a private GitHub repo named 'obsidian_notes', then:")
+        print(f"  cd {VAULT} && git remote add origin <your-repo-url> && git push -u origin main")
+
+def _git_init_vault():
+    subprocess.run(["git", "init", "-q"], cwd=VAULT, check=True)
+    subprocess.run(["git", "add", "."], cwd=VAULT, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "Initial vault structure"], cwd=VAULT, check=True)
+
 def main() -> int:
     args = sys.argv[1:]
     cmd = args[0] if args else "status"
     apply = "--apply" in args
     {"status": lambda: cmd_status(), "install": lambda: cmd_install(apply),
-     "update": lambda: cmd_update(apply), "uninstall": lambda: cmd_uninstall(apply)}.get(
+     "update": lambda: cmd_update(apply), "uninstall": lambda: cmd_uninstall(apply),
+     "init-vault": lambda: cmd_init_vault(apply)}.get(
         cmd, lambda: print(__doc__))()
     return 0
 

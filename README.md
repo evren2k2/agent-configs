@@ -16,9 +16,8 @@ A centralized repository for shared configurations, rules, and skills for **Clau
   - `policies/`: Custom security and tool-access policies.
 - `hooks/`: Shared shell scripts for session management and vault validation. Referenced by both gemini-cli and antigravity hook configs.
 - `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (empty by default — see [Santa Method](#santa-method-optional-adversarial-review)).
-- `bin/`: the `vault` CLI, the `vault-mcp` server, and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status`).
-- `setup-graphify.sh`: optional, independent installer for the graphify code-knowledge-graph integration (separate from the vault install).
-- `init-vault.*`: Scripts to initialize a fresh Obsidian vault.
+- `bin/`: the `vault` CLI, the `vault-mcp` server, and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status` / `init-vault`).
+- `setup-graphify.py`: optional, independent installer for the graphify code-knowledge-graph integration (separate from the vault install).
 
 ## Requirements
 
@@ -74,19 +73,11 @@ git clone <your-vault-url> ~/obsidian_notes
 ```
 
 #### If you want to start a fresh vault:
-Run the initialization script which creates the required directory structure (`areas/`, `agent/`, etc.) and initializes a local Git repository.
-
-**Windows (PowerShell):**
-```powershell
-.\init-vault.ps1
-```
-
-**Linux / macOS (Bash):**
+Create the required directory structure (`areas/`, `agent/`, etc.) and a local Git repo with:
 ```bash
-./init-vault.sh
+python3 bin/agentcfg init-vault --apply     # omit --apply for a dry-run preview
 ```
-
-Follow the post-initialization instructions to link it to a private GitHub repository.
+Then follow the printed instructions to link it to a private GitHub repository.
 
 ## Features
 
