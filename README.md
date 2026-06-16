@@ -16,24 +16,25 @@ A centralized repository for shared configurations, rules, and skills for **Clau
   - `policies/`: Custom security and tool-access policies.
 - `hooks/`: Shared shell scripts for session management and vault validation. Referenced by both gemini-cli and antigravity hook configs.
 - `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (empty by default — see [Santa Method](#santa-method-optional-adversarial-review)).
-- `setup.*`: Platform-specific setup scripts (Bash or PowerShell) to establish symlinks.
+- `bin/`: the `vault` CLI, the `vault-mcp` server, and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status`).
+- `setup-graphify.sh`: optional, independent installer for the graphify code-knowledge-graph integration (separate from the vault install).
 - `init-vault.*`: Scripts to initialize a fresh Obsidian vault.
 
 ## Requirements
 
 - **Git:** Required for cloning and version control. **Git Bash** is specifically required on Windows to execute the shell-based hooks.
 - **Node.js & npm:** Required for Claude Code installation and hook execution.
-- **Python 3.8+:** Required for the vault graph engine and MCP server (`vault` CLI / `vault-mcp`). Semantic search (`vault embed` / `vault_semantic_search`) additionally needs the packages in `requirements.txt` (`sentence-transformers`, `numpy`) — the setup script installs them automatically. The core vault tooling works without them.
+- **Python 3.8+:** Required for the vault graph engine and MCP server (`vault` CLI / `vault-mcp`). Semantic search (`vault embed` / `vault_semantic_search`) additionally needs the packages in `requirements.txt` (`sentence-transformers`, `numpy`) — `agentcfg install` installs them automatically. The core vault tooling works without them.
 - **Obsidian Notes:** The hooks are hardcoded to look for the vault at `~/obsidian_notes` (`C:\Users\<user>\obsidian_notes` on Windows). This folder **must** be placed exactly there for the hooks to function.
 - **Permissions:** 
     - **Linux/macOS:** Standard user permissions are sufficient.
-    - **Windows:** The `setup.ps1` script will attempt to create Symbolic Links (requires Developer Mode or Admin), but will automatically fall back to **Junctions** and **Hardlinks** for standard users.
+    - **Windows:** `agentcfg` creates Symbolic Links (requires Developer Mode or Admin); without those it automatically falls back to **copies** (re-run `agentcfg update` after editing repo files to re-sync).
 
 ## Setup Instructions
 
 ### 1. Install the CLIs
 
-Make sure the agents you want to use are installed first. The setup script wires configs but does not install the tools themselves.
+Make sure the agents you want to use are installed first. `agentcfg` wires configs but does not install the tools themselves.
 
 **Antigravity CLI (`agy`):**
 ```bash
@@ -48,19 +49,21 @@ The Windows installer drops the binary at `%LOCALAPPDATA%\agy\bin\agy.exe` and a
 **Claude Code** and **Gemini CLI** install per their respective docs (`npm install -g @anthropic/claude-code`, `npm install -g @google/gemini-cli`).
 
 ### 2. Link Configurations
-Clone this repository into your home directory (or any preferred location) and run the setup script for your environment.
+Clone this repository into your home directory (or any preferred location), then run the installer — a single cross-platform Python tool (`bin/agentcfg`) that replaces the old `setup.sh`/`setup.ps1`:
 
-#### Linux / macOS (Bash/Zsh)
 ```bash
-./setup.sh
+python3 bin/agentcfg install --apply     # omit --apply for a dry-run preview
 ```
 
-#### Windows (PowerShell)
-```powershell
-.\setup.ps1
+It is **non-destructive**: it merges a marked block into an existing `CLAUDE.md`/`GEMINI.md` and deep-merges keys into `settings.json` (never overwriting your own config), and drops per-skill symlinks (copies on locked-down Windows) into your config dirs. Manage it anytime:
+
+```bash
+agentcfg status               # what's installed / drifted
+agentcfg update --apply       # re-sync after editing repo CLAUDE.md / settings.json
+agentcfg uninstall --apply    # cleanly remove everything (restores backups)
 ```
 
-The setup script symlinks each `.antigravity/plugins/<name>/` directory into `~/.gemini/antigravity-cli/plugins/<name>/` — `agy` discovers them automatically. Existing agy-imported gemini extensions in the same parent directory are left untouched.
+`agentcfg` symlinks (or copies) each `.antigravity/plugins/<name>/` directory into `~/.gemini/antigravity-cli/plugins/<name>/` — `agy` discovers them automatically. Existing agy-imported gemini extensions in the same parent directory are left untouched.
 
 ### 3. Initialize or Connect your Vault
 The configurations expect an Obsidian vault at `~/obsidian_notes`. 
@@ -120,7 +123,7 @@ While `reviewers` is empty, `session-start.sh` emits nothing about santa and the
 ```bash
 agy -p "List the names of all MCP tools available to you, comma-separated."
 ```
-The output should include the five `vault_*` tools (`vault_find`, `vault_semantic_search`, `vault_project`, `vault_show`, `vault_links`). If they're missing, the `obsidian` plugin's `mcp_config.json` isn't being picked up — verify the symlink at `~/.gemini/antigravity-cli/plugins/obsidian` and re-run `agy plugin validate <that path>`.
+The output should include the five `vault_*` tools (`vault_find`, `vault_semantic_search`, `vault_project`, `vault_show`, `vault_links`). If they're missing, the `obsidian` plugin's `mcp_config.json` isn't being picked up — verify the link (or copy, on Windows) at `~/.gemini/antigravity-cli/plugins/obsidian` and re-run `agy plugin validate <that path>`.
 
 Each subdirectory under `.antigravity/plugins/` is a self-contained agy plugin. Layout per plugin:
 

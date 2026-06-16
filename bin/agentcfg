@@ -1,0 +1,433 @@
+#!/usr/bin/env python3
+"""agentcfg — lifecycle for the agent-configs repo: install / update / uninstall / status.
+
+NON-DESTRUCTIVE (graphify-style): never overwrites a user's existing global config.
+Per-artifact strategy:
+  - shared config FILES (CLAUDE.md, GEMINI.md) -> MERGE a marked block, keep the rest
+  - shared config JSON  (settings.json)        -> DEEP-MERGE our keys (never delete theirs), .orig backup
+  - collection DIRS (skills, rules, policies)  -> per-ITEM symlink (drop ours in, keep the user's)
+  - our namespace (~/.agent-configs, agy plugins) -> symlink
+  - MCP servers -> `claude mcp add/remove --scope user` + gemini config merge (already additive)
+
+Merged files are COPIES, so re-run `agentcfg update` after editing repo CLAUDE.md/settings.json.
+Per-item dir symlinks stay LIVE (edit the repo -> active everywhere, no re-sync).
+
+  agentcfg status                 read-only: what's installed / drifted
+  agentcfg install   [--apply]    dry-run unless --apply
+  agentcfg update    [--apply]    re-sync merged files + dir items (idempotent)
+  agentcfg uninstall [--apply]    remove our block/keys/links; restore .orig backups
+"""
+from __future__ import annotations
+import json, os, shutil, subprocess, sys
+from pathlib import Path
+
+HOME = Path.home()
+REPO = Path(__file__).resolve().parent.parent
+BIN_DIR = REPO / "bin"
+GEMINI_MCP_CONFIG = HOME / ".gemini" / "config" / "mcp_config.json"
+PATH_MARKER = "# Added by agent-configs"
+MD_BEGIN = "<!-- BEGIN agent-configs (managed — edit the repo, run `agentcfg update`) -->"
+MD_END = "<!-- END agent-configs -->"
+JSON_MARK = "_agentConfigsManaged"          # records the top-level keys we introduced
+VAULT_LAUNCHER = ('S="$HOME/.agent-configs/bin/vault-mcp.py"; for P in python3 python py; do '
+                  'command -v "$P" >/dev/null 2>&1 && "$P" -c "" >/dev/null 2>&1 && exec "$P" "$S"; '
+                  'done; echo "vault-mcp: no working python in PATH" >&2; exit 1')
+
+# Windows can't make symlinks without admin/dev-mode, so fall back to copies there
+# (or force with --copy). Copies need `agentcfg update` to re-sync after repo edits.
+COPY = ("--copy" in sys.argv) or (os.name == "nt")
+MANIFEST = HOME / ".agent-configs-installed.json"   # tracks copy-placed paths for clean uninstall
+REQUIREMENTS = REPO / "requirements.txt"
+
+AGENTS = ["claude", "gemini"]
+MD_FILES = [(REPO / ".claude/CLAUDE.md", HOME / ".claude/CLAUDE.md"),
+            (REPO / ".gemini/GEMINI.md", HOME / ".gemini/GEMINI.md")]
+JSON_FILES = [(REPO / ".claude/settings.json", HOME / ".claude/settings.json"),
+              (REPO / ".gemini/settings.json", HOME / ".gemini/settings.json")]
+ITEM_DIRS = [(REPO / f".{a}/{d}", HOME / f".{a}/{d}") for a in AGENTS for d in ("rules", "skills", "policies")]
+
+C = {"ok": "\033[32m", "warn": "\033[33m", "bad": "\033[31m", "dim": "\033[2m", "end": "\033[0m"}
+def c(s, k): return f"{C[k]}{s}{C['end']}" if sys.stdout.isatty() else s
+
+# ----------------------------------------------------------------- namespace links
+def namespace_links() -> list[tuple[Path, Path]]:
+    links = [(REPO, HOME / ".agent-configs")]
+    plug = REPO / ".antigravity/plugins"
+    if plug.is_dir():
+        for src in sorted(p for p in plug.iterdir() if p.is_dir()):
+            links.append((src, HOME / ".gemini/antigravity-cli/plugins" / src.name))
+    return links
+
+def item_links() -> list[tuple[Path, Path]]:
+    out = []
+    for src_dir, dest_dir in ITEM_DIRS:
+        if src_dir.is_dir():
+            for src in sorted(src_dir.iterdir()):
+                out.append((src, dest_dir / src.name))
+    return out
+
+def collection_dirs() -> list[tuple[Path, Path]]:
+    return [(s, d) for (s, d) in ITEM_DIRS if s.is_dir()]
+
+def agy_plugins() -> list[str]:
+    root = REPO / ".antigravity/plugins"
+    return sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
+
+# ----------------------------------------------------------------- probes
+def is_ours(dest: Path) -> bool:
+    if not dest.is_symlink():
+        return False
+    try:
+        return str(dest.resolve()).startswith(str(REPO.resolve()))
+    except OSError:
+        return True   # broken link that was ours
+
+def link_state(src: Path, dest: Path) -> str:
+    if dest.is_symlink():
+        if not dest.exists():
+            return "dangling"
+        return "ok" if dest.resolve() == src.resolve() else "elsewhere"
+    return "real-file" if dest.exists() else "missing"
+
+def md_has_block(dest: Path) -> bool:
+    try:
+        return MD_BEGIN in dest.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+def json_managed_keys(dest: Path) -> list[str]:
+    try:
+        return json.loads(dest.read_text(encoding="utf-8")).get(JSON_MARK, [])
+    except Exception:
+        return []
+
+def have(cmd): return shutil.which(cmd) is not None
+
+def claude_user_has(name: str) -> bool:
+    if not have("claude"): return False
+    try:
+        r = subprocess.run(["claude", "mcp", "list"], capture_output=True, text=True, timeout=25)
+        return name in r.stdout
+    except Exception:
+        return False
+
+def gemini_mcp_has(name: str) -> bool:
+    try:
+        return name in json.loads(GEMINI_MCP_CONFIG.read_text(encoding="utf-8")).get("mcpServers", {})
+    except Exception:
+        return False
+
+def path_rc() -> Path | None:
+    for rc in (HOME/".bashrc", HOME/".zshrc", HOME/".my-bashrc"):
+        try:
+            if rc.exists() and str(BIN_DIR) in rc.read_text(encoding="utf-8"):
+                return rc
+        except OSError:
+            pass
+    return None
+
+def agy_registered(name: str) -> bool:
+    if not have("agy"): return False
+    try:
+        return name in subprocess.run(["agy","plugin","list"], capture_output=True, text=True, timeout=25).stdout
+    except Exception:
+        return False
+
+# ----------------------------------------------------------------- pure transforms
+def strip_md_block(text: str) -> str:
+    if MD_BEGIN not in text:
+        return text
+    pre, _, rest = text.partition(MD_BEGIN)
+    _, _, post = rest.partition(MD_END)
+    return (pre.rstrip() + "\n" + post.lstrip()).strip()
+
+def render_md(repo_src: Path, current: str) -> str:
+    body = repo_src.read_text(encoding="utf-8").rstrip()
+    block = f"{MD_BEGIN}\n{body}\n{MD_END}\n"
+    base = strip_md_block(current).strip()
+    return (base + "\n\n" + block) if base else block
+
+def deep_merge(base: dict, overlay: dict, added: list) -> dict:
+    for k, v in overlay.items():
+        if k not in base:
+            base[k] = v
+            added.append(k)
+        elif isinstance(base[k], dict) and isinstance(v, dict):
+            deep_merge(base[k], v, [])
+        elif isinstance(base[k], list) and isinstance(v, list):
+            base[k] += [x for x in v if x not in base[k]]
+        else:
+            base[k] = v   # scalar: ours wins (we manage these)
+    return base
+
+# ----------------------------------------------------------------- mutators
+def _backup_once(dest: Path):
+    bak = dest.with_suffix(dest.suffix + ".orig")
+    if dest.exists() and not dest.is_symlink() and not bak.exists():
+        shutil.copy2(dest, bak)
+
+def apply_md(repo_src: Path, dest: Path):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    current = ""
+    if dest.is_symlink():       # migrate: was a whole-file symlink to the repo
+        dest.unlink()
+    elif dest.exists():
+        _backup_once(dest)
+        current = dest.read_text(encoding="utf-8")
+    dest.write_text(render_md(repo_src, current), encoding="utf-8")
+
+def apply_json(repo_src: Path, dest: Path):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    repo_data = json.loads(repo_src.read_text(encoding="utf-8"))
+    base: dict = {}
+    if dest.is_symlink():        # migrate from whole-file symlink
+        dest.unlink()
+    elif dest.exists():
+        _backup_once(dest)
+        base = json.loads(dest.read_text(encoding="utf-8"))
+    prior = set(base.get(JSON_MARK, []))
+    base.pop(JSON_MARK, None)
+    added: list = []
+    merged = deep_merge(base, repo_data, added)
+    merged[JSON_MARK] = sorted(prior | set(added))
+    dest.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+
+_COPY_IGNORE = shutil.ignore_patterns(".git", "graphify-out", ".venv", "__pycache__", "node_modules")
+
+def _manifest_load() -> dict:
+    try:
+        return json.loads(MANIFEST.read_text(encoding="utf-8"))
+    except Exception:
+        return {"copies": []}
+
+def _manifest_add(dest: Path):
+    m = _manifest_load()
+    if str(dest) not in m["copies"]:
+        m["copies"].append(str(dest))
+    MANIFEST.write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
+
+def _rm(dest: Path):
+    if dest.is_dir() and not dest.is_symlink():
+        shutil.rmtree(dest)
+    else:
+        dest.unlink()
+
+def apply_link(src: Path, dest: Path, backup=False):
+    """Symlink src->dest, or (COPY mode: Windows / --copy) copy it and record in the manifest."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.is_symlink() or dest.exists():
+        if backup and not dest.is_symlink():
+            shutil.move(str(dest), str(dest) + ".orig")
+        else:
+            _rm(dest)
+    if COPY:
+        shutil.copytree(src, dest, ignore=_COPY_IGNORE) if src.is_dir() else shutil.copy2(src, dest)
+        _manifest_add(dest)
+    else:
+        os.symlink(src, dest)
+
+def install_deps(apply):
+    if not REQUIREMENTS.exists():
+        return
+    probe = ('import importlib.util as u,sys;'
+             'sys.exit(0 if u.find_spec("sentence_transformers") and u.find_spec("numpy") else 1)')
+    cands = [REPO / ".venv/bin/python", HOME / ".venv/bin/python"]
+    py = next((str(p) for p in cands if p.exists()), shutil.which("python3") or shutil.which("python"))
+    if not py:
+        print("  (no python found — semantic-search deps skipped)"); return
+    if subprocess.run([py, "-c", probe]).returncode == 0:
+        print(f"  {c('ok','ok')}     semantic-search deps present ({py})"); return
+    _do(apply, f"pip install -r requirements.txt into {py}",
+        lambda: subprocess.run([py, "-m", "pip", "install", "--quiet", "-r", str(REQUIREMENTS)], check=True))
+
+# ----------------------------------------------------------------- commands
+def _do(apply, desc, fn):
+    if not apply:
+        print(f"  would  {desc}"); return
+    try:
+        fn(); print(f"  {c('done','ok')}  {desc}")
+    except Exception as e:
+        print(f"  {c('FAIL','bad')}  {desc}  ({e})")
+
+def cmd_status():
+    print(f"agent-configs status   repo: {REPO}\n")
+    print("Shared config FILES (merged — not symlinked):")
+    for src, dest in MD_FILES:
+        st = c("block present","ok") if md_has_block(dest) else (c("SYMLINK (pre-merge)","warn") if dest.is_symlink() else c("no block","warn"))
+        print(f"  [{st}] {dest}")
+    for src, dest in JSON_FILES:
+        if dest.is_symlink(): st = c("SYMLINK (pre-merge)","warn")
+        elif json_managed_keys(dest): st = c(f"merged ({len(json_managed_keys(dest))} keys)","ok")
+        else: st = c("not merged","warn")
+        print(f"  [{st}] {dest}")
+    print("\nCollection DIRS (per-item symlinks — live):")
+    for src_dir, dest_dir in collection_dirs():
+        if is_ours(dest_dir):
+            print(f"  [{c('WHOLE-DIR SYMLINK (pre-migrate)','warn')}] {dest_dir}")
+        else:
+            items = [(src_dir/ch.name, dest_dir/ch.name) for ch in sorted(src_dir.iterdir())]
+            ok = sum(1 for s, d in items if link_state(s, d) == "ok")
+            mark = c(f"{ok}/{len(items)} items linked", "ok" if items and ok == len(items) else "warn")
+            print(f"  [{mark}] {dest_dir}/")
+    print("\nNamespace links:")
+    for src, dest in namespace_links():
+        print(f"  [{c(link_state(src,dest),'ok' if link_state(src,dest)=='ok' else 'warn')}] {dest}")
+    print("\nMCP / PATH / agy:")
+    print(f"  [{c('ok','ok') if claude_user_has('vault-mcp') else c('missing','warn')}] vault-mcp @ Claude user scope")
+    print(f"  [{c('ok','ok') if gemini_mcp_has('vault-mcp') else c('missing','warn')}] vault-mcp @ {GEMINI_MCP_CONFIG}")
+    print(f"  [{c('ok','ok') if path_rc() else c('missing','warn')}] {BIN_DIR} on PATH")
+    for n in agy_plugins():
+        print(f"  [{c('ok','ok') if agy_registered(n) else c('missing','warn')}] agy plugin '{n}'")
+
+def _install_or_update(apply, label):
+    print(f"agent-configs {label} ({'APPLYING' if apply else 'dry-run — pass --apply'})\n")
+    print("Merge shared config files:")
+    for src, dest in MD_FILES:
+        if src.exists(): _do(apply, f"merge marked block -> {dest}", lambda s=src,d=dest: apply_md(s,d))
+    for src, dest in JSON_FILES:
+        if src.exists(): _do(apply, f"deep-merge keys -> {dest}", lambda s=src,d=dest: apply_json(s,d))
+    print("\nMigrate whole-dir symlinks -> real dirs (so per-item links don't write through them):")
+    needed = [d for _, d in collection_dirs() if is_ours(d)]
+    if not needed:
+        print("  (none needed)")
+    for dest_dir in needed:
+        _do(apply, f"convert {dest_dir} symlink -> real dir", lambda d=dest_dir: (d.unlink(), d.mkdir(parents=True, exist_ok=True)))
+    print("\nPer-item dir symlinks (additive, live):")
+    for src, dest in item_links():
+        if link_state(src,dest) == "ok":
+            print(f"  {c('ok','ok')}     {dest}")
+        else:
+            _do(apply, f"link {dest} -> {src}", lambda s=src,d=dest: apply_link(s,d, backup=True))
+    print("\nNamespace links:")
+    for src, dest in namespace_links():
+        if link_state(src,dest) == "ok":
+            print(f"  {c('ok','ok')}     {dest}")
+        else:
+            _do(apply, f"link {dest} -> {src}", lambda s=src,d=dest: apply_link(s,d))
+
+def cmd_install(apply):
+    _install_or_update(apply, "install")
+    print("\nMCP / PATH / agy:")
+    if not claude_user_has("vault-mcp"):
+        _do(apply, "claude mcp add --scope user vault-mcp",
+            lambda: subprocess.run(["claude","mcp","add","--scope","user","--transport","stdio",
+                                    "vault-mcp","--","bash","-c",VAULT_LAUNCHER], check=True))
+    if not gemini_mcp_has("vault-mcp"):
+        _do(apply, f"merge vault-mcp into {GEMINI_MCP_CONFIG}",
+            lambda: apply_json_key(GEMINI_MCP_CONFIG, "vault-mcp",
+                                   {"command":"bash","args":["-c",VAULT_LAUNCHER],"trust":True}))
+    if not path_rc():
+        _do(apply, f"add {BIN_DIR} to PATH", _add_path)
+    for n in agy_plugins():
+        if not agy_registered(n):
+            _do(apply, f"agy plugin install {n}",
+                lambda n=n: subprocess.run(["agy","plugin","install",
+                                            str(HOME/".gemini/antigravity-cli/plugins"/n)], check=True))
+    print("\nDependencies:")
+    install_deps(apply)
+
+def cmd_update(apply):
+    """Re-sync the merged (copied) files + dir items. MCP/PATH unchanged."""
+    _install_or_update(apply, "update")
+
+def cmd_uninstall(apply):
+    print(f"agent-configs uninstall ({'APPLYING' if apply else 'dry-run — pass --apply'})\n")
+    if apply and claude_user_has("vault-mcp"):
+        print(c("  ! removing vault-mcp now drops vault tools from any running session.\n","warn"))
+    print("Shared config files (strip our block / restore .orig):")
+    for src, dest in MD_FILES:
+        if md_has_block(dest):
+            _do(apply, f"strip agent-configs block from {dest}", lambda d=dest: _strip_md(d))
+    for src, dest in JSON_FILES:
+        bak = dest.with_suffix(dest.suffix + ".orig")
+        if bak.exists():
+            _do(apply, f"restore {bak.name} -> {dest.name}", lambda b=bak,d=dest: shutil.move(str(b),str(d)))
+        elif json_managed_keys(dest):
+            _do(apply, f"remove {len(json_managed_keys(dest))} managed keys from {dest.name} (no .orig backup)",
+                lambda d=dest: _unmerge_json(d))
+    print("\nCollection dirs / items (only repo-resolving symlinks):")
+    for src_dir, dest_dir in collection_dirs():
+        if is_ours(dest_dir):
+            _do(apply, f"rm dir symlink {dest_dir}", lambda d=dest_dir: d.unlink())
+        else:
+            for ch in sorted(src_dir.iterdir()):
+                dest = dest_dir / ch.name
+                if is_ours(dest):
+                    _do(apply, f"rm symlink {dest}", lambda d=dest: d.unlink())
+    print("\nNamespace links:")
+    for src, dest in namespace_links():
+        if is_ours(dest):
+            _do(apply, f"rm symlink {dest}", lambda d=dest: d.unlink())
+    print("\nMCP / PATH / agy:")
+    if claude_user_has("vault-mcp"):
+        _do(apply, "claude mcp remove vault-mcp --scope user",
+            lambda: subprocess.run(["claude","mcp","remove","vault-mcp","--scope","user"], check=True))
+    if gemini_mcp_has("vault-mcp"):
+        _do(apply, f"remove vault-mcp key from {GEMINI_MCP_CONFIG}", lambda: _json_del_key(GEMINI_MCP_CONFIG,"vault-mcp"))
+    rc = path_rc()
+    if rc:
+        _do(apply, f"strip PATH lines from {rc}", lambda r=rc: _strip_path(r))
+    for n in agy_plugins():
+        if agy_registered(n):
+            _do(apply, f"agy plugin uninstall {n}", lambda n=n: subprocess.run(["agy","plugin","uninstall",n], check=True))
+    copies = _manifest_load().get("copies", [])
+    if copies:
+        print("\nCopied items (Windows/--copy mode):")
+        for p in copies:
+            d = Path(p)
+            if d.exists() or d.is_symlink():
+                _do(apply, f"rm copy {d}", lambda d=d: _rm(d))
+        _do(apply, "clear copy manifest", lambda: MANIFEST.unlink())
+
+# ----------------------------------------------------------------- small helpers
+def apply_json_key(path: Path, key: str, val: dict):
+    d = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    d.setdefault("mcpServers", {})[key] = val
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+
+def _json_del_key(path: Path, key: str):
+    d = json.loads(path.read_text(encoding="utf-8"))
+    d.get("mcpServers", {}).pop(key, None)
+    path.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+
+def _strip_md(dest: Path):
+    text = strip_md_block(dest.read_text(encoding="utf-8")).strip()
+    if text:
+        dest.write_text(text + "\n", encoding="utf-8")
+    else:
+        dest.unlink()
+
+def _unmerge_json(dest: Path):
+    d = json.loads(dest.read_text(encoding="utf-8"))
+    for k in d.pop(JSON_MARK, []):
+        d.pop(k, None)
+    dest.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+
+def _strip_path(rc: Path):
+    lines, out, skip = rc.read_text(encoding="utf-8").splitlines(), [], False
+    for ln in lines:
+        if PATH_MARKER in ln: skip = True; continue
+        if skip and str(BIN_DIR) in ln and "PATH" in ln: skip = False; continue
+        skip = False; out.append(ln)
+    rc.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+
+def _add_path():
+    shell = os.environ.get("SHELL", "")
+    rc = HOME / (".zshrc" if shell.endswith("zsh") else ".bashrc")
+    if rc.exists() and not os.access(rc, os.W_OK):
+        rc = HOME / ".my-bashrc"
+    with rc.open("a", encoding="utf-8") as f:
+        f.write(f"\n{PATH_MARKER}\nexport PATH=\"{BIN_DIR}:$PATH\"\n")
+
+def main() -> int:
+    args = sys.argv[1:]
+    cmd = args[0] if args else "status"
+    apply = "--apply" in args
+    {"status": lambda: cmd_status(), "install": lambda: cmd_install(apply),
+     "update": lambda: cmd_update(apply), "uninstall": lambda: cmd_uninstall(apply)}.get(
+        cmd, lambda: print(__doc__))()
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

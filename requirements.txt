@@ -4,7 +4,7 @@
 # The core `vault` CLI and the graph MCP tools (vault_find / vault_project /
 # vault_show / vault_links) work WITHOUT these.
 #
-# Installed by setup.sh / setup.ps1; resolved at runtime by bin/venv_bootstrap.py
+# Installed by `agentcfg install`; resolved at runtime by bin/venv_bootstrap.py
 # (cascade: shell Python -> <repo>/.venv -> ~/.venv).
 
 sentence-transformers

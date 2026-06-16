@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # setup-graphify.sh — install the graphify code knowledge graph for Claude Code + Gemini CLI.
 #
-# Deliberately SEPARATE from setup.sh (the vault install) so the two are modular:
-#   - vault only      -> run setup.sh, never run this
-#   - graphify only   -> run this, never run setup.sh
+# Deliberately SEPARATE from the vault install (`agentcfg`) so the two are modular:
+#   - vault only      -> run `agentcfg install`, never run this
+#   - graphify only   -> run this, never run agentcfg
 #   - both            -> run both; graphify's installer preserves any existing
 #                        vault-mcp entry when it touches shared MCP config files.
 #
