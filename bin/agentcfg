@@ -19,7 +19,7 @@ Per-item dir symlinks stay LIVE (edit the repo -> active everywhere, no re-sync)
   agentcfg init-vault [--apply]   create a fresh ~/obsidian_notes vault (dirs + git repo)
 """
 from __future__ import annotations
-import json, os, shutil, subprocess, sys
+import copy, json, os, shutil, subprocess, sys
 from pathlib import Path
 
 HOME = Path.home()
@@ -30,7 +30,8 @@ AGY_MCP_CONFIG = HOME / ".gemini" / "config" / "mcp_config.json"
 PATH_MARKER = "# Added by agent-configs"
 MD_BEGIN = "<!-- BEGIN agent-configs (managed — edit the repo, run `agentcfg update`) -->"
 MD_END = "<!-- END agent-configs -->"
-JSON_MARK = "_agentConfigsManaged"          # records the top-level keys we introduced
+JSON_MARK = "_agentConfigsManaged"          # top-level keys we introduced (fresh)
+JSON_SNAP = "_agentConfigsSnapshot"         # pre-merge value of pre-existing keys we merged into
 VAULT_LAUNCHER = ('S="$HOME/.agent-configs/bin/vault-mcp.py"; for P in python3 python py; do '
                   'command -v "$P" >/dev/null 2>&1 && "$P" -c "" >/dev/null 2>&1 && exec "$P" "$S"; '
                   'done; echo "vault-mcp: no working python in PATH" >&2; exit 1')
@@ -98,9 +99,10 @@ def md_has_block(dest: Path) -> bool:
 
 def json_managed_keys(dest: Path) -> list[str]:
     try:
-        return json.loads(dest.read_text(encoding="utf-8")).get(JSON_MARK, [])
+        d = json.loads(dest.read_text(encoding="utf-8"))
     except Exception:
         return []
+    return sorted(set(d.get(JSON_MARK, [])) | set(d.get(JSON_SNAP, {}).keys()))
 
 def have(cmd): return shutil.which(cmd) is not None
 
@@ -148,13 +150,12 @@ def render_md(repo_src: Path, current: str) -> str:
     base = strip_md_block(current).strip()
     return (base + "\n\n" + block) if base else block
 
-def deep_merge(base: dict, overlay: dict, added: list) -> dict:
+def deep_merge(base: dict, overlay: dict) -> dict:
     for k, v in overlay.items():
         if k not in base:
             base[k] = v
-            added.append(k)
         elif isinstance(base[k], dict) and isinstance(v, dict):
-            deep_merge(base[k], v, [])
+            deep_merge(base[k], v)
         elif isinstance(base[k], list) and isinstance(v, list):
             base[k] += [x for x in v if x not in base[k]]
         else:
@@ -164,8 +165,15 @@ def deep_merge(base: dict, overlay: dict, added: list) -> dict:
 # ----------------------------------------------------------------- mutators
 def _backup_once(dest: Path):
     bak = dest.with_suffix(dest.suffix + ".orig")
-    if dest.exists() and not dest.is_symlink() and not bak.exists():
-        shutil.copy2(dest, bak)
+    if not (dest.exists() and not dest.is_symlink() and not bak.exists()):
+        return
+    try:
+        text = dest.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    if JSON_MARK in text or MD_BEGIN in text:
+        return   # already our merged output — backing it up would poison the restore
+    shutil.copy2(dest, bak)
 
 def apply_md(repo_src: Path, dest: Path):
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -186,11 +194,22 @@ def apply_json(repo_src: Path, dest: Path):
     elif dest.exists():
         _backup_once(dest)
         base = json.loads(dest.read_text(encoding="utf-8"))
-    prior = set(base.get(JSON_MARK, []))
+    prior_added = set(base.get(JSON_MARK, []))
+    prior_snap = base.get(JSON_SNAP, {})
     base.pop(JSON_MARK, None)
-    added: list = []
-    merged = deep_merge(base, repo_data, added)
-    merged[JSON_MARK] = sorted(prior | set(added))
+    base.pop(JSON_SNAP, None)
+    added, snap = set(prior_added), dict(prior_snap)
+    for k in repo_data:
+        if k in prior_added or k in prior_snap:
+            continue                              # already accounted for on a prior run
+        if k in base:
+            snap[k] = copy.deepcopy(base[k])      # first time we touch a pre-existing key
+        else:
+            added.add(k)                          # a key we introduce wholesale
+    merged = deep_merge(base, repo_data)
+    merged[JSON_MARK] = sorted(added)
+    if snap:
+        merged[JSON_SNAP] = snap
     dest.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
 
 _COPY_IGNORE = shutil.ignore_patterns(".git", "graphify-out", ".venv", "__pycache__", "node_modules")
@@ -401,9 +420,15 @@ def _strip_md(dest: Path):
 
 def _unmerge_json(dest: Path):
     d = json.loads(dest.read_text(encoding="utf-8"))
+    snap = d.pop(JSON_SNAP, {})
     for k in d.pop(JSON_MARK, []):
-        d.pop(k, None)
-    dest.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+        d.pop(k, None)               # keys we introduced -> remove
+    for k, orig in snap.items():
+        d[k] = orig                  # keys we merged into -> restore pre-merge value
+    if d:
+        dest.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+    else:
+        dest.unlink()                # nothing was the user's -> remove the file we created
 
 def _strip_path(rc: Path):
     lines, out, skip = rc.read_text(encoding="utf-8").splitlines(), [], False

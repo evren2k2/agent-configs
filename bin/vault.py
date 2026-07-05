@@ -120,7 +120,8 @@ def extract_wikilinks(body: str) -> list[tuple[str, str | None]]:
         folder_hint: str | None = None
         if "/" in raw:
             parts = raw.split("/")
-            folder_hint = normalize_key(parts[-2]) if len(parts) >= 2 else None
+            folder = [normalize_key(p) for p in parts[:-1] if p.strip()]
+            folder_hint = "/".join(folder) or None   # full folder path, not just parent
             raw = parts[-1]
         stem = normalize_key(raw)
         if stem:
@@ -177,10 +178,9 @@ def parse_note(path: Path, vault: Path) -> dict | None:
         "body": body.strip()[:BODY_CAP],
     }
 
-def _parent_folder(rel_path: str) -> str:
-    """Last folder component of a vault-relative path, normalized. Empty string for root files."""
-    parts = rel_path.split("/")
-    return normalize_key(parts[-2]) if len(parts) >= 2 else ""
+def _folder_components(rel_path: str) -> list[str]:
+    """Normalized folder components of a vault-relative path (filename dropped)."""
+    return [normalize_key(p) for p in rel_path.replace("\\", "/").split("/")[:-1]]
 
 def _assign_keys(files: list[tuple[Path, float, Path]]) -> tuple[dict[Path, str], dict[str, list[str]]]:
     """Decide a canonical key per file. Unique stems key bare; colliding stems get
@@ -226,31 +226,65 @@ def _assign_keys(files: list[tuple[Path, float, Path]]) -> tuple[dict[Path, str]
             stem_to_keys[stem].append(key)
     return path_to_key, stem_to_keys
 
-def _resolve_link(stem: str, folder_hint: str | None, source_folder: str,
-                  stem_to_keys: dict[str, list[str]]) -> str:
-    """Map a raw wikilink (stem, folder_hint) to a canonical key."""
+def _is_suffix(short: list[str], full: list[str]) -> bool:
+    """True if `short` is a trailing segment of `full` (folder-path suffix)."""
+    return len(short) <= len(full) and full[len(full) - len(short):] == short
+
+def _common_prefix_len(a: list[str], b: list[str]) -> int:
+    n = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        n += 1
+    return n
+
+def _resolve_link(stem: str, folder_hint: str | None, source_folders: list[str],
+                  stem_to_keys: dict[str, list[str]],
+                  key_to_folders: dict[str, list[str]]) -> str:
+    """Map a raw wikilink (stem, folder_hint) to a canonical key.
+
+    Disambiguation, in order of trust:
+      1. Explicit hint — the linked folder path must be a trailing segment of a
+         candidate's real folder path (full-suffix match). A unique match wins.
+      2. Same subtree — the candidate sharing the longest folder-path prefix with
+         the source note (the nearest note in the same project branch).
+    If neither yields a unique answer the link is genuinely ambiguous, so we leave
+    it unresolved (bare stem) rather than fabricate a wrong edge into the graph.
+    """
     candidates = stem_to_keys.get(stem, [])
     if not candidates:
-        # Unresolved (broken link or note doesn't exist). Keep raw stem.
-        return stem
+        return stem                          # broken link / note doesn't exist
     if len(candidates) == 1:
         return candidates[0]
-    # Disambiguate
+    # 1. Explicit folder hint: full-suffix match against each candidate's real path.
     if folder_hint:
+        hint = [h for h in folder_hint.split("/") if h]
+        matches = [c for c in candidates if _is_suffix(hint, key_to_folders.get(c, []))]
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            candidates = matches             # narrow, then break ties by source branch
+    # 2. Nearest in the same subtree: longest common folder prefix with the source.
+    if source_folders:
+        best, best_len, tie = None, 0, False
         for c in candidates:
-            if "/" in c and c.split("/", 1)[0] == folder_hint:
-                return c
-    if source_folder:
-        for c in candidates:
-            if "/" in c and c.split("/", 1)[0] == source_folder:
-                return c
-    return candidates[0]
+            n = _common_prefix_len(source_folders, key_to_folders.get(c, []))
+            if n > best_len:
+                best, best_len, tie = c, n, False
+            elif n == best_len and best is not None:
+                tie = True
+        if best is not None and not tie:
+            return best
+    return stem                              # ambiguous — do not guess
 
 def build_index(vault: Path, existing: dict | None = None, verbose: bool = False) -> dict:
     files: list[tuple[Path, float, Path]] = []
     for path, mtime in scan_vault(vault):
         files.append((path, mtime, path.relative_to(vault)))
     path_to_key, stem_to_keys = _assign_keys(files)
+    key_to_folders: dict[str, list[str]] = {
+        path_to_key[path]: _folder_components(str(rel)) for path, _mtime, rel in files
+    }
 
     prev_notes = (existing or {}).get("notes", {}) if existing else {}
     new_notes: dict[str, dict] = {}
@@ -271,7 +305,7 @@ def build_index(vault: Path, existing: dict | None = None, verbose: bool = False
 
     # Resolve wikilinks against the full key vocabulary
     for key, n in new_notes.items():
-        source_folder = _parent_folder(n["path"])
+        source_folders = _folder_components(n["path"])
         raw = n.get("_raw_links") or []
         resolved: list[str] = []
         for entry in raw:
@@ -280,7 +314,7 @@ def build_index(vault: Path, existing: dict | None = None, verbose: bool = False
             else:
                 # Older cached entries may be bare strings; treat as no hint.
                 stem, hint = entry, None
-            resolved.append(_resolve_link(stem, hint, source_folder, stem_to_keys))
+            resolved.append(_resolve_link(stem, hint, source_folders, stem_to_keys, key_to_folders))
         # de-dup while preserving order
         seen: set[str] = set()
         n["forward_links"] = [x for x in resolved if not (x in seen or seen.add(x))]

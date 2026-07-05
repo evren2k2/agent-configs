@@ -605,10 +605,50 @@ class DeepHierarchyTests(unittest.TestCase):
         self.assertIn("buried", folder_keys)
         self.assertIn("implementation/v1/spec", folder_keys)
 
+    def test_bare_link_resolves_to_nearest_project(self):
+        # A bare [[working-context]] from deep inside foo resolves to foo's, never
+        # bar's — by longest common folder prefix with the source, not list order.
+        for key in ("implementation/v1/spec", "archive/v1/spec", "buried"):
+            fl = self.idx["notes"][key]["forward_links"]
+            self.assertIn("foo/working-context", fl, key)
+            self.assertNotIn("bar/working-context", fl, key)
+
+    def test_ambiguous_bare_link_left_unresolved(self):
+        # [[spec]] from foo/working-context is ambiguous (two foo specs equidistant)
+        # and from bar/working-context is cross-project — neither may fabricate an
+        # edge by silently picking candidates[0].
+        for key in ("foo/working-context", "bar/working-context"):
+            fl = self.idx["notes"][key]["forward_links"]
+            self.assertNotIn("implementation/v1/spec", fl, key)
+            self.assertNotIn("archive/v1/spec", fl, key)
+
+    def test_explicit_deep_hint_resolves_exact_branch(self):
+        # Explicit [[implementation/v1/spec]] / [[archive/v1/spec]] target the exact
+        # note via full folder-path suffix match. Previously the single-parent hint
+        # "v1" matched neither candidate and both fell through to candidates[0].
+        v = self.tmp / "_hint"
+        files = {
+            "projects/foo/implementation/v1/spec.md": _note("foo", link="x"),
+            "projects/foo/archive/v1/spec.md": _note("foo", status="archived", link="x"),
+            "projects/foo/impl-pointer.md": _note("foo", link="implementation/v1/spec"),
+            "projects/foo/arch-pointer.md": _note("foo", link="archive/v1/spec"),
+        }
+        for rel, content in files.items():
+            fp = v / rel
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(content, encoding="utf-8")
+        idx = vault.load_index(v)
+        impl_fl = idx["notes"]["impl-pointer"]["forward_links"]
+        arch_fl = idx["notes"]["arch-pointer"]["forward_links"]
+        self.assertIn("implementation/v1/spec", impl_fl)
+        self.assertNotIn("archive/v1/spec", impl_fl)
+        self.assertIn("archive/v1/spec", arch_fl)
+        self.assertNotIn("implementation/v1/spec", arch_fl)
+
     def test_collision_group_uses_uniform_depth(self):
         # All members of a colliding stem-group share one qualification depth: the
-        # sibling unique at depth 1 ("w2/spec") is still qualified to depth 2, so
-        # _resolve_link's first-component (folder) matching stays valid.
+        # sibling unique at depth 1 ("w2/spec") is still qualified to depth 2, keeping
+        # each key's folder path a clean suffix of its real path for link resolution.
         v = self.tmp / "_sub"
         for rel in ("projects/p/a/v1/spec.md", "projects/p/b/v1/spec.md",
                     "projects/p/c/w2/spec.md"):

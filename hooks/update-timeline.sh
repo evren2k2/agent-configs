@@ -64,7 +64,7 @@ fi
 OUTPUT=$(python3 -c "
 import re, sys
 
-with open('$FILE_PATH', 'r') as f:
+with open(sys.argv[1], 'r') as f:
     content = f.read()
 
 # Split into checkpoints
@@ -183,7 +183,7 @@ line2 = ' | '.join(details) if details else '(no notable details)'
 
 print(line1)
 print(line2)
-" 2>/dev/null)
+" "$FILE_PATH" 2>/dev/null)
 
 [ -z "$OUTPUT" ] && OUTPUT="(checkpoint parse failed)\n(empty)"
 

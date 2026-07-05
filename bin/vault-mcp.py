@@ -306,6 +306,8 @@ class VaultMCPServer:
                 continue
             try:
                 request = json.loads(line)
+                if not isinstance(request, dict):
+                    continue   # JSON-RPC batch arrays / bare scalars: skip, don't crash
                 # Notifications have no "id" — must not send a response
                 if "id" not in request:
                     self.handle_request(request)
