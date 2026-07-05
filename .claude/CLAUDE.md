@@ -30,19 +30,10 @@ The SessionStart hook provides the project name. Use vault MCP tools (`vault_*`)
 
 See `rules/obsidian-notes.md` for the tool decision tree.
 
-## Available Skills
-
-| Skill | When to use |
-|-------|-------------|
-| `obsidian-notes` | Taking notes, recalling context, building connections, persistent memory |
-| `obsidian-audit` | Vault health checks — after creating 3+ notes, weekly, or on request |
-| `project-archaeology` | Reverse-engineer an existing codebase into trustworthy vault documentation (runs once per project) |
-| `architect-interview` | New code architecture, system design, or technical plans — resolves assumptions through an interview before building |
-| `checkpoint` | Context getting heavy, at natural subtask breakpoints, or when explicitly asked — saves working context before compaction |
-
 ## Note Quality Gate
 
 Before writing ANY note to the vault, verify:
+0. **Write class** — Direction/decision content (project structure, goals, decisions) requires explicit user approval before writing. Implementation notes are autonomous but need-to-know only (weaknesses, future clashes — not detail dumps). Plumbing (`agent_util`, `inbox/`) is autonomous.
 1. **Future value** — Would a future Claude instance genuinely benefit? (not just "nice to have")
 2. **No duplication** — Is this already in the codebase, git history, or existing notes?
 3. **Frontmatter present** — Every note MUST have `date`, `tags`, `type`, and `status` in YAML frontmatter
@@ -55,7 +46,7 @@ Before writing ANY note to the vault, verify:
 **New project (2+ notes):** Create `projects/<project>/` subfolder. Each note gets `project: <name>` in frontmatter. No `_index.md` — use frontmatter queries to find project notes.
 **Area promotion:** When a second project needs knowledge from the first, extract it to `areas/`.
 **Quick capture:** Drop in `inbox/`, process later.
-**Decision record:** Use `type: decision`. Include the decision, alternatives considered, rationale, and who decided.
+**Decision record:** Use `type: decision`. Include the decision, alternatives considered, rationale, and who decided. Requires user-approved direction before writing.
 **Session summary:** Use structured template (see obsidian-notes skill).
 
 ## Git Commits

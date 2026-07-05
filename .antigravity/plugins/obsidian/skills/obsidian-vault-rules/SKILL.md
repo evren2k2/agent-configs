@@ -33,17 +33,22 @@ Five native MCP tools are registered and pre-approved. You MUST use one before `
 **Workflow — bootstrap project context:**
 1. `vault_project(name=<project>)` → compact listing of all notes with status/type
 2. Pick 2-3 notes (usually `working-context.md` + highest-priority items)
-3. `read_file` those files only — do not read the whole project folder
+3. Small project (≤3 short notes)? `read_file` them directly. Otherwise delegate reading to a subagent and keep only a ~25-line summary in main context.
 
-## When to Write Notes (Quality Bar)
-Write to the vault only when a future agent instance would genuinely benefit. Ask: "Would this save significant time or prevent re-discovery in a future session?"
+## Write Policy (classify BEFORE writing)
+The class of a note decides who authorizes it:
+
+1. **Direction** — anything that sets project structure, goals, or direction, or records a decision (`type: decision | mission`, roadmaps, working-context goals). Write ONLY on user direction: propose a one-line summary, get approval, then write. Keep in `projects/<name>/decisions/` (or project root for `working-context.md`).
+2. **Implementation** — technical findings from doing the work. Autonomous, but strictly need-to-know: weaknesses, non-obvious constraints, things that will clash with future work — never a broad dump of details the code already shows. Keep in `projects/<name>/implementation/` or `logs/`, isolated from direction notes.
+3. **Plumbing** — `agent_util` files (session log, timeline, snapshots, checkpoints) and `inbox/` quick capture. Autonomous.
+
+For classes 2-3 the quality bar still applies: write only when a future agent instance would genuinely benefit. Ask: "Would this save significant time or prevent re-discovery in a future session?"
 
 **Write a note when:**
 - A non-obvious solution was found (capture the reasoning, not just the fix)
 - A meaningful connection between ideas surfaces
 - The user explicitly asks to remember something
 - Project context was built that would take >5 minutes to reconstruct
-- A decision was made with rationale worth preserving
 
 **Do NOT write when:** the interaction was trivial, the info is already in the codebase/git history/existing notes, or there's no reusable insight beyond what the commit message says.
 

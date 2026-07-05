@@ -18,7 +18,7 @@ description: Use when taking notes, recalling context, building connections, or 
 
 ## Philosophy
 
-The vault is Claude's **external brain** — persistent, cross-session memory where thinking accumulates. Each session should leave the vault richer than it found it. Obsidian is the overflow for insight that would otherwise vanish at session end.
+The vault is Claude's **external brain** — persistent, cross-session memory where thinking accumulates. Write with intent, not volume: direction/decision notes only on user-approved direction, implementation notes on a need-to-know basis, plumbing freely (see the Write Policy in the obsidian-vault-rules skill). Obsidian is the overflow for insight that would otherwise vanish at session end.
 
 ---
 
@@ -42,7 +42,7 @@ The vault is Claude's **external brain** — persistent, cross-session memory wh
 ### Subfolder Rules
 - **1 note** → place directly in parent folder (`projects/some-topic.md`)
 - **2+ notes** → create subfolder (`projects/project/architecture.md`)
-- **No `_index.md` hub files.** Project grouping uses `project:` frontmatter. Agents find notes via `grep -r "project: <name>"`.
+- **No `_index.md` hub files.** Project grouping uses `project:` frontmatter. Agents find notes via `vault_project` / `vault_find` (grep on `project: <name>` is the last resort).
 - **Do NOT create generic hub filenames** (`Home.md`, `_index.md`, `index.md`). Use descriptive project-prefixed names if a hub is needed (e.g., `ece8893-fpga-overview.md`).
 - **Never** prefix-based flat naming (`projects/proj-arch.md`, `projects/proj-bugs.md`)
 - **Folder depth**: nest as deep as needed — the vault tools handle arbitrary depth — but prefer 1–2 levels (e.g. `projects/project/note.md`) for readability
@@ -54,6 +54,7 @@ The vault is Claude's **external brain** — persistent, cross-session memory wh
 
 Before creating or modifying a vault note, check ALL of these:
 
+- [ ] **Write class**: Direction/decision note? → needs explicit user approval first. Implementation note? → need-to-know only, isolated from direction notes. Plumbing/inbox? → autonomous.
 - [ ] **Future value**: Would a future Claude instance genuinely benefit?
 - [ ] **No duplication**: Not already in codebase, git history, or existing notes?
 - [ ] **Frontmatter**: Has `date`, `tags`, `type`, and `status` in YAML frontmatter?
@@ -184,4 +185,4 @@ Fall back to **grep** only for full-text patterns inside note bodies. Also check
 
 ## Sync
 
-Cron auto-commits every 5 min — no manual push needed. Force immediate sync: `~/obsidian_notes/scripts/server-sync.sh`.
+A 5-minute scheduler auto-commits — no manual push needed. Force immediate sync: `~/.agent-configs/hooks/server-sync.sh`.

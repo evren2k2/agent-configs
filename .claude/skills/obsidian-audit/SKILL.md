@@ -19,14 +19,13 @@ Perform each check in order. Report findings in the scorecard at the end.
 ### 1. Sync Health
 
 ```bash
-crontab -l | grep server-sync
-tail -20 ~/obsidian_notes/scripts/sync.log
+tail -3 ~/.agent-configs/hooks/sync.log   # sync runs on a 5-min scheduler; entries must be recent
 git -C ~/obsidian_notes status
 git -C ~/obsidian_notes log --oneline origin/main..HEAD
 git -C ~/obsidian_notes log --oneline HEAD..origin/main
 ```
 
-**Pass:** Cron active, no stuck uncommitted files, local and remote in sync.
+**Pass:** last sync.log entry within ~10 minutes, no stuck uncommitted files, local and remote in sync.
 
 ### 2. Folder Placement
 
@@ -150,8 +149,8 @@ Read `agent/connections.md`:
 
 ### 12. Folder Depth
 
-- Max 2 levels from a top-level folder: `projects/project/note.md`
-- **Flag:** `projects/project/sub/note.md` or deeper
+- Any depth is allowed (the vault tools handle it), but prefer 1-2 levels (`projects/project/{logs,decisions,implementation,archive}/note.md`)
+- **Flag:** only structures that hurt legibility — e.g. a deep chain holding a single note
 
 ### 13. Volume Check
 

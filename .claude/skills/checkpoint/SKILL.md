@@ -61,22 +61,6 @@ Anything unresolved, waiting on the user, or stuck. "None" if clear.
 - **Include the user's words.** Quote the original request so post-compact you doesn't reinterpret it.
 - **30 seconds, not 5 minutes.** This is a quick dump, not a polished document.
 
-## Session Tag
-
-After writing the checkpoint, **always** write a one-line session tag file:
-
-```bash
-echo "<topic>" > ~/.claude/.session-topic
-```
-
-Where `<topic>` is the parenthetical from your checkpoint header. For example, if your header is `## Checkpoint — 2026-04-14 (SVA protocol checkers)`, write:
-
-```bash
-echo "SVA protocol checkers" > ~/.claude/.session-topic
-```
-
-This tag tells the pre-compact hook which checkpoint to recover if compaction fires. Without it, the hook can only list checkpoint headers and the post-compact agent must figure out which is relevant via a subagent.
-
 ## Trimming
 
 After appending, read the file back, split on `---CHECKPOINT---`, keep the last 5 entries, and rewrite the file.

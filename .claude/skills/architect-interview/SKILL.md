@@ -31,6 +31,9 @@ Never ask a purely open-ended question. Every time you ask the user for a decisi
 
 When triggered, execute the following loop. **Do not batch more than 1-2 critical questions at a time.**
 
+**Step 0: Consult the Vault**
+Before the first question, check prior art: `vault_project(name=<project>)` and `vault_semantic_search` for related `type: decision` notes. A previously approved decision resolves a node without a question — cite it instead of re-asking; only re-open it if the new request conflicts with it.
+
 **Step 1: Map the Immediate Dependencies**
 Identify the most critical, unresolved architectural decision required to move forward. 
 
