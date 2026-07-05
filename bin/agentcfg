@@ -32,9 +32,6 @@ MD_BEGIN = "<!-- BEGIN agent-configs (managed — edit the repo, run `agentcfg u
 MD_END = "<!-- END agent-configs -->"
 JSON_MARK = "_agentConfigsManaged"          # top-level keys we introduced (fresh)
 JSON_SNAP = "_agentConfigsSnapshot"         # pre-merge value of pre-existing keys we merged into
-VAULT_LAUNCHER = ('S="$HOME/.agent-configs/bin/vault-mcp.py"; for P in python3 python py; do '
-                  'command -v "$P" >/dev/null 2>&1 && "$P" -c "" >/dev/null 2>&1 && exec "$P" "$S"; '
-                  'done; echo "vault-mcp: no working python in PATH" >&2; exit 1')
 
 # Windows can't make symlinks without admin/dev-mode, so fall back to copies there
 # (or force with --copy). Copies need `agentcfg update` to re-sync after repo edits.
@@ -346,11 +343,13 @@ def _install_or_update(apply, label):
             _do(apply, f"link {dest} -> {src}", lambda s=src,d=dest: apply_link(s,d))
 
 def _vault_mcp_spec():
-    """(command, args) to launch vault-mcp: the .cmd wrapper on Windows (COPY mode
-    has no bash), else bash -c with the POSIX launcher."""
+    """(command, args) for the single vault-mcp launcher shared by claude + agy:
+    the .cmd wrapper on Windows (COPY mode has no bash), else the POSIX launcher.sh
+    (the same script the antigravity plugin's mcp_config.json points at)."""
+    base = HOME / ".agent-configs" / "bin"
     if os.name == "nt":
-        return str(HOME / ".agent-configs/bin/vault-mcp-launcher.cmd"), []
-    return "bash", ["-c", VAULT_LAUNCHER]
+        return str(base / "vault-mcp-launcher.cmd"), []
+    return "bash", [str(base / "vault-mcp-launcher.sh")]
 
 def cmd_install(apply):
     _install_or_update(apply, "install")

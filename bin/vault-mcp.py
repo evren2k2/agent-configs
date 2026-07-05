@@ -31,13 +31,24 @@ class VaultMCPServer:
         self.semantic_tried = False
 
     def ensure_index(self):
-        """Lazy-load or refresh the index."""
-        if self.index is None:
-            # First load
-            self.index = vault.load_index(self.vault_path)
-        else:
-            # Check for updates (fast if no changes)
-            self.index = vault.load_index(self.vault_path)
+        """Load/refresh the lexical index. If a semantic store is already loaded,
+        keep it in step with the index incrementally (only changed notes re-embed;
+        the encoder is already in memory) so mid-session edits stay searchable.
+        The expensive first build stays lazy — it only runs on a real query."""
+        self.index = vault.load_index(self.vault_path)
+        if self.semantic is not None and self.index.get("_changed"):
+            try:
+                import vault_embed
+                encode, _ = self.semantic
+                _, meta = self.semantic[1]
+                model = meta.get("model") or vault_embed.DEFAULT_MODEL
+                vault_embed.build_vectors(self.vault_path, self.index,
+                                          model_name=model, encode=encode)
+                vectors, meta = vault_embed.load_store(self.vault_path, model)
+                if vectors is not None:
+                    self.semantic = (encode, (vectors, meta))
+            except Exception as e:
+                print(f"vault-mcp: semantic refresh skipped — {e}", file=sys.stderr, flush=True)
         return self.index
 
     def handle_request(self, request):
