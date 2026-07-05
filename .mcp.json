@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "graphify": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "GM=$(command -v graphify-mcp 2>/dev/null || echo \"$HOME/.graphify-venv/bin/graphify-mcp\"); exec \"$GM\" graphify-out/graph.json"
+      ]
+    }
+  }
+}

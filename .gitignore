@@ -31,3 +31,5 @@
 # Python cache
 **/__pycache__/
 *.pyc
+graphify-out/
+.graphifyignore
