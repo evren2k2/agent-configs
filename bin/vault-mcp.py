@@ -247,14 +247,17 @@ class VaultMCPServer:
             self.semantic_tried = True
             try:
                 import vault_embed
-                vectors, meta = vault_embed.load_store(self.vault_path)
+                # Load/build against the store's OWN model, not DEFAULT_MODEL — else
+                # a custom-model store fails the model check and gets silently rebuilt
+                # with the default.
+                model = vault_embed.stored_model(self.vault_path) or vault_embed.DEFAULT_MODEL
+                vectors, meta = vault_embed.load_store(self.vault_path, model)
                 if vectors is None:
                     print("vault-mcp: Building vector store...", file=sys.stderr, flush=True)
-                    vault_embed.build_vectors(self.vault_path, idx)
-                    vectors, meta = vault_embed.load_store(self.vault_path)
+                    vault_embed.build_vectors(self.vault_path, idx, model_name=model)
+                    vectors, meta = vault_embed.load_store(self.vault_path, model)
                 if vectors is not None:
-                    encode = vault_embed.make_encoder(
-                        meta.get("model") or vault_embed.DEFAULT_MODEL)
+                    encode = vault_embed.make_encoder(meta.get("model") or model)
                     self.semantic = (encode, (vectors, meta))
             except Exception as e:
                 print(f"vault-mcp: semantic search disabled — {e}",

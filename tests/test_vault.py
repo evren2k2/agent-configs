@@ -164,6 +164,21 @@ class FrontmatterTests(unittest.TestCase):
         self.assertEqual(fm["type"], "concept")
         self.assertEqual(fm["project"], "foo")
 
+    def test_inline_and_block_tags_both_parse(self):
+        inline = "---\ntags: [alpha, beta]\ntype: concept\n---\nbody\n"
+        block = "---\ntags:\n  - alpha\n  - beta\ntype: concept\n---\nbody\n"
+        fm_i, _ = vault.parse_frontmatter(inline)
+        fm_b, _ = vault.parse_frontmatter(block)
+        self.assertEqual(fm_i["tags"], ["alpha", "beta"])
+        self.assertEqual(fm_b["tags"], ["alpha", "beta"])       # Obsidian Properties default
+        self.assertEqual(fm_b["type"], "concept")               # key after the list still parses
+
+    def test_block_list_does_not_swallow_next_key(self):
+        text = "---\ntags:\n  - x\nstatus: active\n---\nb\n"
+        fm, _ = vault.parse_frontmatter(text)
+        self.assertEqual(fm["tags"], ["x"])
+        self.assertEqual(fm["status"], "active")
+
 
 class WikilinkExtractionTests(unittest.TestCase):
     def test_simple(self):

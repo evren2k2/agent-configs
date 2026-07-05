@@ -94,5 +94,60 @@ class AgentcfgJsonLifecycle(unittest.TestCase):
         self.assertFalse(self.dest.exists())
 
 
+class AgentcfgIsOurs(unittest.TestCase):
+    """The uninstall orphan-cleanup iterates the dest dir and unlink()s every
+    is_ours entry — the one destructive P2 change. Pin down its classification."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.dest_dir = self.tmp / "skills"
+        self.dest_dir.mkdir()
+        self.repo = ac.REPO.resolve()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_dest_iteration_removes_only_ours(self):
+        ours = self.dest_dir / "ours"
+        ours.symlink_to(self.repo / "README.md")                  # -> into REPO: ours
+        real = self.dest_dir / "user-real.md"
+        real.write_text("mine", encoding="utf-8")                 # user's real file: keep
+        target = self.tmp / "outside.md"
+        target.write_text("x", encoding="utf-8")
+        elsewhere = self.dest_dir / "user-link"
+        elsewhere.symlink_to(target)                              # user's link elsewhere: keep
+        broken = self.dest_dir / "broken-ours"
+        broken.symlink_to(self.repo / "does-not-exist-xyz")       # broken but target in REPO: ours
+
+        self.assertTrue(ac.is_ours(ours))
+        self.assertFalse(ac.is_ours(real))
+        self.assertFalse(ac.is_ours(elsewhere))
+        self.assertTrue(ac.is_ours(broken))
+
+        removed = {ch.name for ch in sorted(self.dest_dir.iterdir()) if ac.is_ours(ch)}
+        self.assertEqual(removed, {"ours", "broken-ours"})
+
+    def test_sibling_prefix_is_not_ours(self):
+        # A symlink into a sibling like <repo>-backup must not match by string prefix.
+        sib = self.repo.parent / (self.repo.name + "-backup-xyz")
+        link = self.dest_dir / "sibling"
+        link.symlink_to(sib / "file.md")
+        self.assertFalse(ac.is_ours(link))
+
+
+class AgentcfgStripMd(unittest.TestCase):
+    def test_missing_end_marker_preserves_user_content(self):
+        # An incomplete block (BEGIN but no END) must not eat trailing user content.
+        text = "user pre\n\n" + ac.MD_BEGIN + "\nmanaged body\n\n# My own notes\nkeep me\n"
+        self.assertEqual(ac.strip_md_block(text), text)
+
+    def test_complete_block_is_stripped(self):
+        text = "user pre\n\n" + ac.MD_BEGIN + "\nmanaged\n" + ac.MD_END + "\n\nuser post\n"
+        out = ac.strip_md_block(text)
+        self.assertNotIn("managed", out)
+        self.assertIn("user pre", out)
+        self.assertIn("user post", out)
+
+
 if __name__ == "__main__":
     unittest.main()

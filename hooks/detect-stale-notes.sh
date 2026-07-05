@@ -31,7 +31,7 @@ case "$FILE_PATH" in
     */.claude/settings.json)
         REMINDER="You just modified settings.json (hooks config). Ensure your vault's setup guide reflects these changes."
         ;;
-    */obsidian_notes/scripts/session-start.sh|*/obsidian_notes/scripts/validate-vault-write.sh|*/obsidian_notes/scripts/session-stop.sh|*/obsidian_notes/scripts/pre-compact.sh)
+    */agent-configs/hooks/*.sh)
         REMINDER="You just modified a hook script. Update your vault documentation if the core automation behavior changed."
         ;;
     */CLAUDE.md|*/GEMINI.md)

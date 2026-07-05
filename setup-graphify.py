@@ -89,8 +89,11 @@ def register_project(project: Path):
         slp.write_text(json.dumps(s, indent=2) + "\n", encoding="utf-8")
     # keep build artifacts out of git
     gi = project / ".gitignore"
-    lines = gi.read_text(encoding="utf-8").splitlines() if gi.exists() else []
+    existing = gi.read_text(encoding="utf-8") if gi.exists() else ""
+    lines = existing.splitlines()
     with gi.open("a", encoding="utf-8") as f:
+        if existing and not existing.endswith("\n"):
+            f.write("\n")   # don't glue our entry onto a final line lacking a newline
         for entry in ("graphify-out/", ".graphifyignore"):
             if entry not in lines:
                 f.write(entry + "\n")

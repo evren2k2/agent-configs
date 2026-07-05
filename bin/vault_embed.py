@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from pathlib import Path
 
@@ -75,8 +76,25 @@ def load_store(vault_path, model_name: str = DEFAULT_MODEL):
 
 def _save_store(vault_path, vectors: np.ndarray, meta: dict) -> None:
     vec_path, meta_path = store_paths(vault_path)
-    np.save(vec_path, vectors)
-    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    # Atomic writes: temp file in the SAME cache dir + os.replace, so a concurrent
+    # reader (or the cron writer) never loads a half-written store.
+    vtmp = vec_path.parent / f"{vec_path.stem}.tmp{os.getpid()}.npy"
+    np.save(vtmp, vectors)                 # vtmp already ends in .npy -> np.save won't append
+    os.replace(vtmp, vec_path)
+    mtmp = meta_path.parent / f"{meta_path.name}.tmp{os.getpid()}"
+    mtmp.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    os.replace(mtmp, meta_path)
+
+
+def stored_model(vault_path):
+    """The model an existing store was built with (read from its meta), or None if
+    no store exists. Lets a caller load a custom-model store without a model
+    mismatch that would otherwise trigger a silent rebuild with DEFAULT_MODEL."""
+    _, meta_path = store_paths(vault_path)
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8")).get("model")
+    except Exception:
+        return None
 
 
 # ------------------------------------------------------------- helpers ----

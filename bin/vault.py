@@ -66,6 +66,13 @@ def cache_dir(vault: Path) -> Path:
 def index_path(vault: Path) -> Path:
     return cache_dir(vault) / "index.json"
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write via a temp file in the SAME dir + os.replace, so a concurrent reader
+    (or a second writer: one MCP server per session + cron) never sees a torn file."""
+    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
 
 # ---------------------------------------------------------------- parse ----
 
@@ -77,31 +84,40 @@ def normalize_key(s: str) -> str:
     return s.lower().replace(" ", "-").replace("_", "-")
 
 def parse_frontmatter(text: str) -> tuple[dict, str]:
-    """Shallow YAML-ish parser. Handles only the subset used by this vault:
-    scalar values and inline arrays `[a, b, c]`.
+    """Shallow YAML-ish parser. Handles the subset this vault uses: scalars,
+    inline arrays `[a, b, c]`, and block-style lists (the Obsidian Properties
+    default), e.g. `tags:` followed by indented `- foo` / `- bar` lines.
     """
     m = FRONTMATTER_RE.match(text)
     if not m:
         return {}, text
     block, body = m.group(1), text[m.end():]
     fm: dict = {}
-    for line in block.splitlines():
-        line = line.rstrip()
-        if not line.strip() or ":" not in line or line.lstrip().startswith("#"):
+    lines = block.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i].rstrip()
+        i += 1
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or line[:1] in (" ", "\t") or ":" not in line:
             continue
-        if line[:1] in (" ", "\t"):
-            continue  # nested keys not supported; skip
         k, _, v = line.partition(":")
         k = k.strip()
         v = v.strip()
-        if not v:
-            continue
         if v.startswith("[") and v.endswith("]"):
             inner = v[1:-1].strip()
-            items = [x.strip().strip('"').strip("'") for x in inner.split(",") if x.strip()]
-            fm[k] = items
-        else:
+            fm[k] = [x.strip().strip('"').strip("'") for x in inner.split(",") if x.strip()]
+        elif v:
             fm[k] = v.strip('"').strip("'")
+        else:
+            # Empty scalar → consume any block-style "- item" lines that follow.
+            # Only indented dash-items are captured, so a nested key won't be.
+            items = []
+            while i < len(lines) and lines[i][:1] in (" ", "\t") and lines[i].strip().startswith("-"):
+                items.append(lines[i].strip()[1:].strip().strip('"').strip("'"))
+                i += 1
+            if items:
+                fm[k] = items
     return fm, body
 
 def extract_wikilinks(body: str) -> list[tuple[str, str | None]]:
@@ -158,8 +174,9 @@ def scan_vault(vault: Path):
 def parse_note(path: Path, vault: Path) -> dict | None:
     try:
         text = path.read_text(encoding="utf-8-sig")
+        mtime = path.stat().st_mtime
     except (OSError, UnicodeDecodeError):
-        return None
+        return None   # vanished/unreadable mid-scan — drop it, don't crash the build
     # Normalize CRLF → LF so frontmatter regex matches cleanly.
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     fm, body = parse_frontmatter(text)
@@ -170,7 +187,7 @@ def parse_note(path: Path, vault: Path) -> dict | None:
     raw_links = extract_wikilinks(body)
     return {
         "path": rel,
-        "mtime": path.stat().st_mtime,
+        "mtime": mtime,
         "title": title,
         "frontmatter": fm,
         "_raw_links": raw_links,
@@ -370,7 +387,7 @@ def load_index(vault: Path, force_rebuild: bool = False, verbose: bool = False) 
     if existing is None or idx["_changed"] > 0 or deleted or force_rebuild:
         # Strip transient fields before persisting.
         to_persist = {k: v for k, v in idx.items() if k != "_changed"}
-        path.write_text(json.dumps(to_persist, indent=2, default=str), encoding="utf-8")
+        _atomic_write_text(path, json.dumps(to_persist, indent=2, default=str))
         if verbose:
             print(f"Index written ({idx['_changed']} reparsed, {len(deleted)} removed): {path}", file=sys.stderr)
     return idx

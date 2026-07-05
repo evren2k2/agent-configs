@@ -79,10 +79,14 @@ def agy_plugins() -> list[str]:
 def is_ours(dest: Path) -> bool:
     if not dest.is_symlink():
         return False
+    repo = REPO.resolve()
     try:
-        return str(dest.resolve()).startswith(str(REPO.resolve()))
+        resolved = dest.resolve()   # strict=False: resolves broken links to their target too
     except OSError:
-        return True   # broken link that was ours
+        return False                # symlink loop / permission error — not safely ours
+    # Boundary-aware: repo must be the target or an ancestor of it, so a sibling
+    # like <repo>-backup/ doesn't match by bare string prefix.
+    return resolved == repo or repo in resolved.parents
 
 def link_state(src: Path, dest: Path) -> str:
     if dest.is_symlink():
@@ -106,13 +110,15 @@ def json_managed_keys(dest: Path) -> list[str]:
 
 def have(cmd): return shutil.which(cmd) is not None
 
-def claude_user_has(name: str) -> bool:
-    if not have("claude"): return False
+def claude_user_has(name: str):
+    """True/False if known, None if unknown (no claude, or list timed out) — an
+    unknown must not be treated as 'missing' (that triggers a re-add that fails)."""
+    if not have("claude"): return None
     try:
         r = subprocess.run(["claude", "mcp", "list"], capture_output=True, text=True, timeout=25)
         return name in r.stdout
     except Exception:
-        return False
+        return None
 
 def agy_mcp_has(name: str) -> bool:
     try:
@@ -129,18 +135,21 @@ def path_rc() -> Path | None:
             pass
     return None
 
-def agy_registered(name: str) -> bool:
-    if not have("agy"): return False
+def agy_registered(name: str):
+    """True/False if known, None if unknown (no agy, or list timed out)."""
+    if not have("agy"): return None
     try:
         return name in subprocess.run(["agy","plugin","list"], capture_output=True, text=True, timeout=25).stdout
     except Exception:
-        return False
+        return None
 
 # ----------------------------------------------------------------- pure transforms
 def strip_md_block(text: str) -> str:
     if MD_BEGIN not in text:
         return text
     pre, _, rest = text.partition(MD_BEGIN)
+    if MD_END not in rest:
+        return text     # incomplete/corrupt block — don't eat trailing user content
     _, _, post = rest.partition(MD_END)
     return (pre.rstrip() + "\n" + post.lstrip()).strip()
 
@@ -236,10 +245,11 @@ def apply_link(src: Path, dest: Path, backup=False):
     """Symlink src->dest, or (COPY mode: Windows / --copy) copy it and record in the manifest."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.is_symlink() or dest.exists():
-        if backup and not dest.is_symlink():
-            shutil.move(str(dest), str(dest) + ".orig")
+        bak = Path(str(dest) + ".orig")
+        if backup and not dest.is_symlink() and not bak.exists():
+            shutil.move(str(dest), str(bak))   # back up the first real file once
         else:
-            _rm(dest)
+            _rm(dest)                          # symlink, or a real .orig already exists
     if COPY:
         shutil.copytree(src, dest, ignore=_COPY_IGNORE) if src.is_dir() else shutil.copy2(src, dest)
         _manifest_add(dest)
@@ -261,13 +271,23 @@ def install_deps(apply):
         lambda: subprocess.run([py, "-m", "pip", "install", "--quiet", "-r", str(REQUIREMENTS)], check=True))
 
 # ----------------------------------------------------------------- commands
+_FAILURES = 0
+
 def _do(apply, desc, fn):
+    global _FAILURES
     if not apply:
         print(f"  would  {desc}"); return
     try:
         fn(); print(f"  {c('done','ok')}  {desc}")
     except Exception as e:
+        _FAILURES += 1
         print(f"  {c('FAIL','bad')}  {desc}  ({e})")
+
+def _tri(v) -> str:
+    """Status label for a tri-state probe: True->ok, False->missing, None->unknown."""
+    if v is None:
+        return c("unknown", "dim")
+    return c("ok", "ok") if v else c("missing", "warn")
 
 def cmd_status():
     print(f"agent-configs status   repo: {REPO}\n")
@@ -293,11 +313,11 @@ def cmd_status():
     for src, dest in namespace_links():
         print(f"  [{c(link_state(src,dest),'ok' if link_state(src,dest)=='ok' else 'warn')}] {dest}")
     print("\nMCP / PATH / agy:")
-    print(f"  [{c('ok','ok') if claude_user_has('vault-mcp') else c('missing','warn')}] vault-mcp @ Claude user scope")
+    print(f"  [{_tri(claude_user_has('vault-mcp'))}] vault-mcp @ Claude user scope")
     print(f"  [{c('ok','ok') if agy_mcp_has('vault-mcp') else c('missing','warn')}] vault-mcp @ {AGY_MCP_CONFIG}")
     print(f"  [{c('ok','ok') if path_rc() else c('missing','warn')}] {BIN_DIR} on PATH")
     for n in agy_plugins():
-        print(f"  [{c('ok','ok') if agy_registered(n) else c('missing','warn')}] agy plugin '{n}'")
+        print(f"  [{_tri(agy_registered(n))}] agy plugin '{n}'")
 
 def _install_or_update(apply, label):
     print(f"agent-configs {label} ({'APPLYING' if apply else 'dry-run — pass --apply'})\n")
@@ -325,21 +345,29 @@ def _install_or_update(apply, label):
         else:
             _do(apply, f"link {dest} -> {src}", lambda s=src,d=dest: apply_link(s,d))
 
+def _vault_mcp_spec():
+    """(command, args) to launch vault-mcp: the .cmd wrapper on Windows (COPY mode
+    has no bash), else bash -c with the POSIX launcher."""
+    if os.name == "nt":
+        return str(HOME / ".agent-configs/bin/vault-mcp-launcher.cmd"), []
+    return "bash", ["-c", VAULT_LAUNCHER]
+
 def cmd_install(apply):
     _install_or_update(apply, "install")
     print("\nMCP / PATH / agy:")
-    if not claude_user_has("vault-mcp"):
+    mcp_cmd, mcp_args = _vault_mcp_spec()
+    if claude_user_has("vault-mcp") is False:   # skip on unknown (no claude / timeout)
         _do(apply, "claude mcp add --scope user vault-mcp",
             lambda: subprocess.run(["claude","mcp","add","--scope","user","--transport","stdio",
-                                    "vault-mcp","--","bash","-c",VAULT_LAUNCHER], check=True))
+                                    "vault-mcp","--", mcp_cmd, *mcp_args], check=True))
     if not agy_mcp_has("vault-mcp"):
         _do(apply, f"merge vault-mcp into {AGY_MCP_CONFIG}",
             lambda: apply_json_key(AGY_MCP_CONFIG, "vault-mcp",
-                                   {"command":"bash","args":["-c",VAULT_LAUNCHER],"trust":True}))
+                                   {"command": mcp_cmd, "args": mcp_args, "trust": True}))
     if not path_rc():
         _do(apply, f"add {BIN_DIR} to PATH", _add_path)
     for n in agy_plugins():
-        if not agy_registered(n):
+        if agy_registered(n) is False:          # skip on unknown (no agy / timeout)
             _do(apply, f"agy plugin install {n}",
                 lambda n=n: subprocess.run(["agy","plugin","install",
                                             str(HOME/".gemini/antigravity-cli/plugins"/n)], check=True))
@@ -369,11 +397,12 @@ def cmd_uninstall(apply):
     for src_dir, dest_dir in collection_dirs():
         if is_ours(dest_dir):
             _do(apply, f"rm dir symlink {dest_dir}", lambda d=dest_dir: d.unlink())
-        else:
-            for ch in sorted(src_dir.iterdir()):
-                dest = dest_dir / ch.name
-                if is_ours(dest):
-                    _do(apply, f"rm symlink {dest}", lambda d=dest: d.unlink())
+        elif dest_dir.is_dir():
+            # Iterate the DEST dir, not src — so links for items since deleted from
+            # the repo (orphans) are removed too, not left dangling.
+            for ch in sorted(dest_dir.iterdir()):
+                if is_ours(ch):
+                    _do(apply, f"rm symlink {ch}", lambda d=ch: d.unlink())
     print("\nNamespace links:")
     for src, dest in namespace_links():
         if is_ours(dest):
@@ -458,15 +487,25 @@ This is your agent-managed Obsidian vault.
 _VAULT_GITIGNORE = ".obsidian/workspace\n.obsidian/workspace.json\n.obsidian/cache/\n*.tmp\n"
 _VAULT_DIRS = [".obsidian", "inbox", "projects", "areas", "library", "personal", "agent"]
 
+def _mkdir_keep(d: Path):
+    d.mkdir(parents=True, exist_ok=True)
+    (d / ".gitkeep").touch()   # so git tracks the otherwise-empty dir
+
+def _write_if_absent(p: Path, text: str):
+    if not p.exists():         # resume-safe: never clobber existing content
+        p.write_text(text, encoding="utf-8")
+
 def cmd_init_vault(apply):
     print(f"agent-configs init-vault ({'APPLYING' if apply else 'dry-run — pass --apply'})\n")
-    if VAULT.exists():
-        print(c(f"  {VAULT} already exists — refusing to clobber. Move/delete it to init fresh.", "warn"))
+    if (VAULT / ".git").exists():
+        print(c(f"  {VAULT} is already a git repo — nothing to init. Move/delete it to start fresh.", "warn"))
         return
+    if VAULT.exists():
+        print(c(f"  {VAULT} exists but isn't a git repo — completing init non-destructively.", "warn"))
     for d in _VAULT_DIRS:
-        _do(apply, f"mkdir {VAULT/d}", lambda d=d: (VAULT/d).mkdir(parents=True, exist_ok=True))
-    _do(apply, f"write {VAULT/'README.md'}", lambda: (VAULT/"README.md").write_text(_VAULT_README, encoding="utf-8"))
-    _do(apply, f"write {VAULT/'.gitignore'}", lambda: (VAULT/".gitignore").write_text(_VAULT_GITIGNORE, encoding="utf-8"))
+        _do(apply, f"mkdir {VAULT/d}", lambda d=d: _mkdir_keep(VAULT/d))
+    _do(apply, f"write {VAULT/'README.md'}", lambda: _write_if_absent(VAULT/"README.md", _VAULT_README))
+    _do(apply, f"write {VAULT/'.gitignore'}", lambda: _write_if_absent(VAULT/".gitignore", _VAULT_GITIGNORE))
     _do(apply, "git init + initial commit", _git_init_vault)
     if apply:
         print("\nNext: create a private GitHub repo named 'obsidian_notes', then:")
@@ -475,7 +514,10 @@ def cmd_init_vault(apply):
 def _git_init_vault():
     subprocess.run(["git", "init", "-q"], cwd=VAULT, check=True)
     subprocess.run(["git", "add", "."], cwd=VAULT, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", "Initial vault structure"], cwd=VAULT, check=True)
+    # Commit only if something is staged, so a resumed init (repo already committed)
+    # doesn't fail on "nothing to commit".
+    if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=VAULT).returncode != 0:
+        subprocess.run(["git", "commit", "-q", "-m", "Initial vault structure"], cwd=VAULT, check=True)
 
 def main() -> int:
     args = sys.argv[1:]
@@ -485,7 +527,7 @@ def main() -> int:
      "update": lambda: cmd_update(apply), "uninstall": lambda: cmd_uninstall(apply),
      "init-vault": lambda: cmd_init_vault(apply)}.get(
         cmd, lambda: print(__doc__))()
-    return 0
+    return 1 if _FAILURES else 0
 
 if __name__ == "__main__":
     sys.exit(main())
