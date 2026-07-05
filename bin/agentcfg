@@ -113,9 +113,11 @@ def claude_user_has(name: str):
     if not have("claude"): return None
     try:
         r = subprocess.run(["claude", "mcp", "list"], capture_output=True, text=True, timeout=25)
-        return name in r.stdout
     except Exception:
         return None
+    if r.returncode != 0:
+        return None      # command ran but failed -> unknown, not "missing"
+    return name in r.stdout
 
 def agy_mcp_has(name: str) -> bool:
     try:
@@ -136,9 +138,12 @@ def agy_registered(name: str):
     """True/False if known, None if unknown (no agy, or list timed out)."""
     if not have("agy"): return None
     try:
-        return name in subprocess.run(["agy","plugin","list"], capture_output=True, text=True, timeout=25).stdout
+        r = subprocess.run(["agy","plugin","list"], capture_output=True, text=True, timeout=25)
     except Exception:
         return None
+    if r.returncode != 0:
+        return None      # command ran but failed -> unknown, not "missing"
+    return name in r.stdout
 
 # ----------------------------------------------------------------- pure transforms
 def strip_md_block(text: str) -> str:
@@ -204,14 +209,30 @@ def apply_json(repo_src: Path, dest: Path):
     prior_snap = base.get(JSON_SNAP, {})
     base.pop(JSON_MARK, None)
     base.pop(JSON_SNAP, None)
-    added, snap = set(prior_added), dict(prior_snap)
-    for k in repo_data:
-        if k in prior_added or k in prior_snap:
-            continue                              # already accounted for on a prior run
-        if k in base:
-            snap[k] = copy.deepcopy(base[k])      # first time we touch a pre-existing key
+    repo_keys = set(repo_data)
+    # Release keys we previously managed but the repo no longer defines: return them
+    # to their pre-merge state one last time, then STOP tracking them (so a later
+    # update doesn't keep force-restoring a key the user has re-adopted).
+    for k in prior_added - repo_keys:
+        base.pop(k, None)                          # we introduced it -> remove
+    for k in set(prior_snap) - repo_keys:
+        base[k] = copy.deepcopy(prior_snap[k])     # pre-existing -> restore user's value
+    # For keys the repo still defines: reset to the pre-merge state, then re-merge the
+    # (possibly changed) overlay fresh — so an update REPLACES prior managed entries
+    # instead of the list-union accumulating stale ones, and never deletes a user key.
+    added: set = set()
+    snap: dict = {}
+    for k in repo_keys:
+        if k in prior_added:
+            added.add(k)
+            base.pop(k, None)                      # was ours: drop; the merge re-adds it
+        elif k in prior_snap:
+            snap[k] = prior_snap[k]
+            base[k] = copy.deepcopy(prior_snap[k])  # restore pre-merge before re-merge
+        elif k in base:
+            snap[k] = copy.deepcopy(base[k])       # first touch of a pre-existing key
         else:
-            added.add(k)                          # a key we introduce wholesale
+            added.add(k)                           # a brand-new key we introduce
     merged = deep_merge(base, repo_data)
     merged[JSON_MARK] = sorted(added)
     if snap:
@@ -243,10 +264,11 @@ def apply_link(src: Path, dest: Path, backup=False):
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.is_symlink() or dest.exists():
         bak = Path(str(dest) + ".orig")
-        if backup and not dest.is_symlink() and not bak.exists():
-            shutil.move(str(dest), str(bak))   # back up the first real file once
+        ours = str(dest) in _manifest_load().get("copies", [])   # a copy we placed before
+        if backup and not dest.is_symlink() and not bak.exists() and not ours:
+            shutil.move(str(dest), str(bak))   # back up the first real USER file once
         else:
-            _rm(dest)                          # symlink, or a real .orig already exists
+            _rm(dest)                          # our symlink/copy, or a real .orig already exists
     if COPY:
         shutil.copytree(src, dest, ignore=_COPY_IGNORE) if src.is_dir() else shutil.copy2(src, dest)
         _manifest_add(dest)
@@ -381,9 +403,12 @@ def cmd_uninstall(apply):
     print(f"agent-configs uninstall ({'APPLYING' if apply else 'dry-run — pass --apply'})\n")
     if apply and claude_user_has("vault-mcp"):
         print(c("  ! removing vault-mcp now drops vault tools from any running session.\n","warn"))
-    print("Shared config files (strip our block / restore .orig):")
+    print("Shared config files (restore .orig / strip our block):")
     for src, dest in MD_FILES:
-        if md_has_block(dest):
+        bak = dest.with_suffix(dest.suffix + ".orig")
+        if bak.exists():
+            _do(apply, f"restore {bak.name} -> {dest.name}", lambda b=bak,d=dest: shutil.move(str(b),str(d)))
+        elif md_has_block(dest):
             _do(apply, f"strip agent-configs block from {dest}", lambda d=dest: _strip_md(d))
     for src, dest in JSON_FILES:
         bak = dest.with_suffix(dest.suffix + ".orig")

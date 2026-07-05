@@ -70,8 +70,15 @@ def _atomic_write_text(path: Path, text: str) -> None:
     """Write via a temp file in the SAME dir + os.replace, so a concurrent reader
     (or a second writer: one MCP server per session + cron) never sees a torn file."""
     tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 # ---------------------------------------------------------------- parse ----

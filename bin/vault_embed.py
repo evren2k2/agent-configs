@@ -76,14 +76,23 @@ def load_store(vault_path, model_name: str = DEFAULT_MODEL):
 
 def _save_store(vault_path, vectors: np.ndarray, meta: dict) -> None:
     vec_path, meta_path = store_paths(vault_path)
-    # Atomic writes: temp file in the SAME cache dir + os.replace, so a concurrent
-    # reader (or the cron writer) never loads a half-written store.
+    # Each file is written atomically (temp in the same cache dir + os.replace) so a
+    # reader never sees a torn file. The two aren't swapped as a unit, but load_store's
+    # shape-count guard rejects a mismatched (vectors, meta) pair from the interleave.
     vtmp = vec_path.parent / f"{vec_path.stem}.tmp{os.getpid()}.npy"
-    np.save(vtmp, vectors)                 # vtmp already ends in .npy -> np.save won't append
-    os.replace(vtmp, vec_path)
     mtmp = meta_path.parent / f"{meta_path.name}.tmp{os.getpid()}"
-    mtmp.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    os.replace(mtmp, meta_path)
+    try:
+        np.save(vtmp, vectors)             # vtmp already ends in .npy -> np.save won't append
+        os.replace(vtmp, vec_path)
+        mtmp.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        os.replace(mtmp, meta_path)
+    except Exception:
+        for t in (vtmp, mtmp):
+            try:
+                t.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def stored_model(vault_path):

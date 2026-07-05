@@ -93,6 +93,49 @@ class AgentcfgJsonLifecycle(unittest.TestCase):
         ac._unmerge_json(self.dest)                               # created file removed cleanly
         self.assertFalse(self.dest.exists())
 
+    def test_update_replaces_managed_entries_without_accumulating(self):
+        # Re-running apply_json with a CHANGED repo overlay (an update) must replace
+        # what the prior version installed, not union stale entries onto it — the
+        # `SessionEnd`->`Stop` rename would otherwise leave a dead SessionEnd block.
+        v1 = self.tmp / "repo_v1.json"
+        v2 = self.tmp / "repo_v2.json"
+        v1.write_text(json.dumps({"hooks": {"SessionEnd": [{"cmd": "old"}]},
+                                  "permissions": {"allow": ["Read(x)"]}}), encoding="utf-8")
+        v2.write_text(json.dumps({"hooks": {"Stop": [{"cmd": "new"}]},
+                                  "permissions": {"allow": ["Read(y)"]}}), encoding="utf-8")
+        user = {"hooks": {"UserE": [{"cmd": "mine"}]}, "permissions": {"allow": ["Bash(ls)"]}}
+        self.dest.write_text(json.dumps(user, indent=2) + "\n", encoding="utf-8")
+
+        ac.apply_json(v1, self.dest)
+        ac.apply_json(v2, self.dest)          # the "update" with a changed overlay
+        m = json.loads(self.dest.read_text())
+        self.assertNotIn("SessionEnd", m["hooks"])                 # stale v1 entry gone
+        self.assertIn("Stop", m["hooks"])                          # v2 present
+        self.assertIn("UserE", m["hooks"])                         # user's preserved
+        self.assertNotIn("Read(x)", m["permissions"]["allow"])     # stale v1 perm gone
+        self.assertEqual(set(m["permissions"]["allow"]), {"Bash(ls)", "Read(y)"})
+
+    def test_update_releases_repo_removed_keys_and_keeps_user_edits(self):
+        # A key the repo drops must be released to the user: restored to its pre-merge
+        # value once, then no longer force-restored — so a later user edit survives.
+        v1 = self.tmp / "r1.json"
+        v2 = self.tmp / "r2.json"
+        v1.write_text(json.dumps({"permissions": {"allow": ["Read(a)"]}, "theme": "dark"}), encoding="utf-8")
+        v2.write_text(json.dumps({"permissions": {"allow": ["Read(a)"]}}), encoding="utf-8")  # drops theme
+        self.dest.write_text(json.dumps({"permissions": {"allow": ["Bash(ls)"]}, "theme": "light"}), encoding="utf-8")
+
+        ac.apply_json(v1, self.dest)
+        self.assertEqual(json.loads(self.dest.read_text())["theme"], "dark")   # ours wins while managed
+        ac.apply_json(v2, self.dest)                                           # v2 drops theme -> release
+        m1 = json.loads(self.dest.read_text())
+        self.assertEqual(m1["theme"], "light")                                 # restored to user's original once
+        self.assertNotIn("theme", m1.get(ac.JSON_SNAP, {}))                    # no longer tracked
+
+        m1["theme"] = "solarized"                                             # user re-adopts the released key
+        self.dest.write_text(json.dumps(m1), encoding="utf-8")
+        ac.apply_json(v2, self.dest)
+        self.assertEqual(json.loads(self.dest.read_text())["theme"], "solarized")  # not clobbered
+
 
 class AgentcfgIsOurs(unittest.TestCase):
     """The uninstall orphan-cleanup iterates the dest dir and unlink()s every

@@ -11,8 +11,8 @@ INPUT=$(cat)
 KEY=$(echo "$INPUT" | python3 -c "import sys,json,hashlib
 d=json.load(sys.stdin)
 k=d.get('session_id') or d.get('transcript_path') or ''
-print(hashlib.sha256(k.encode()).hexdigest()[:16] if k else 'default')" 2>/dev/null)
-[ -z "$KEY" ] && KEY=default
+print(hashlib.sha256(k.encode()).hexdigest()[:16] if k else '')" 2>/dev/null)
+[ -z "$KEY" ] && KEY="day-$(date +%Y-%m-%d)"   # no session_id (or python failed): throttle per day
 
 MARK_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/agent-configs/stop-reminders"
 mkdir -p "$MARK_DIR" 2>/dev/null

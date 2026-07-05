@@ -44,6 +44,7 @@ ERRORS=""
 # Check 1: Frontmatter exists
 if [ -f "$FILE_PATH" ]; then
     FIRST_LINE=$(head -1 "$FILE_PATH")
+    FIRST_LINE="${FIRST_LINE#$'\xEF\xBB\xBF'}"   # strip a leading UTF-8 BOM (read elsewhere via utf-8-sig)
     if [ "$FIRST_LINE" != "---" ]; then
         ERRORS+="MISSING FRONTMATTER: File does not start with YAML frontmatter (---). Every vault note MUST have frontmatter with date, tags, type, status.\n"
     fi

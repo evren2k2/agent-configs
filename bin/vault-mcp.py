@@ -35,8 +35,12 @@ class VaultMCPServer:
         keep it in step with the index incrementally (only changed notes re-embed;
         the encoder is already in memory) so mid-session edits stay searchable.
         The expensive first build stays lazy — it only runs on a real query."""
+        prev_keys = set(self.index["notes"]) if self.index else set()
         self.index = vault.load_index(self.vault_path)
-        if self.semantic is not None and self.index.get("_changed"):
+        # _changed counts reparses; a pure deletion reparses nothing, so also compare
+        # the key set — else a deleted note's passages linger in the semantic store.
+        changed = bool(self.index.get("_changed")) or set(self.index["notes"]) != prev_keys
+        if self.semantic is not None and changed:
             try:
                 import vault_embed
                 encode, _ = self.semantic
@@ -258,17 +262,19 @@ class VaultMCPServer:
             self.semantic_tried = True
             try:
                 import vault_embed
-                # Load/build against the store's OWN model, not DEFAULT_MODEL — else
-                # a custom-model store fails the model check and gets silently rebuilt
-                # with the default.
+                # Use the store's OWN model, not DEFAULT_MODEL — else a custom-model
+                # store fails the model check and gets silently rebuilt with the default.
                 model = vault_embed.stored_model(self.vault_path) or vault_embed.DEFAULT_MODEL
-                vectors, meta = vault_embed.load_store(self.vault_path, model)
-                if vectors is None:
+                encode = vault_embed.make_encoder(model)
+                vec_path, _ = vault_embed.store_paths(self.vault_path)
+                if not vec_path.exists():
                     print("vault-mcp: Building vector store...", file=sys.stderr, flush=True)
-                    vault_embed.build_vectors(self.vault_path, idx, model_name=model)
-                    vectors, meta = vault_embed.load_store(self.vault_path, model)
+                # Sync the store to the current index (incremental: near-instant when
+                # already fresh, a full build when absent) so the first query isn't
+                # served from a between-session-stale or missing store.
+                vault_embed.build_vectors(self.vault_path, idx, model_name=model, encode=encode)
+                vectors, meta = vault_embed.load_store(self.vault_path, model)
                 if vectors is not None:
-                    encode = vault_embed.make_encoder(meta.get("model") or model)
                     self.semantic = (encode, (vectors, meta))
             except Exception as e:
                 print(f"vault-mcp: semantic search disabled — {e}",
