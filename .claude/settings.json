@@ -40,14 +40,14 @@
         ]
       }
     ],
-    "SessionEnd": [
+    "Stop": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "bash ~/.agent-configs/hooks/session-stop.sh",
             "timeout": 5,
-            "statusMessage": "Session end check..."
+            "statusMessage": "Session log check..."
           }
         ]
       }

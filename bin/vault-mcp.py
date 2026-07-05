@@ -180,28 +180,34 @@ class VaultMCPServer:
         else:
             return {"error": {"code": -32601, "message": f"Tool not found: {name}"}}
 
+    def _call_capturing(self, fn, mock, idx, fallback):
+        """Run a vault.cmd_* handler capturing stdout AND stderr. The handlers
+        print 'Not found: X' to stderr and return non-zero on failure; surface
+        that message instead of returning an empty {"text": ""} to the model."""
+        import io
+        from contextlib import redirect_stdout, redirect_stderr
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = fn(mock, idx)
+        text = out.getvalue()
+        if rc:
+            text = err.getvalue().strip() or fallback
+        return {"content": [{"type": "text", "text": text}]}
+
     def tool_find(self, idx, args):
         query = args.get("query")
         limit = args.get("limit", 10)
         fuzzy = args.get("fuzzy", False)
-        
-        # Mocking an args object for the vault handler
+
         class MockArgs:
             def __init__(self, q, l, f):
                 self.query = q
                 self.limit = l
                 self.fuzzy = f
                 self.json = True
-        
-        import io
-        from contextlib import redirect_stdout
-        f = io.StringIO()
-        with redirect_stdout(f):
-            vault.cmd_find(MockArgs(query, limit, fuzzy), idx)
-        
-        return {
-            "content": [{"type": "text", "text": f.getvalue()}]
-        }
+
+        return self._call_capturing(vault.cmd_find, MockArgs(query, limit, fuzzy), idx,
+                                    f"No matches for: {query}")
 
     def tool_project(self, idx, args):
         name = args.get("name")
@@ -220,16 +226,8 @@ class VaultMCPServer:
             def __init__(self, n):
                 self.note = n
                 self.json = True
-        
-        import io
-        from contextlib import redirect_stdout
-        f = io.StringIO()
-        with redirect_stdout(f):
-            vault.cmd_show(MockArgs(note), idx)
-        
-        return {
-            "content": [{"type": "text", "text": f.getvalue()}]
-        }
+        return self._call_capturing(vault.cmd_show, MockArgs(note), idx,
+                                    f"Not found: {note}")
 
     def tool_links(self, idx, args):
         note = args.get("note")
@@ -239,16 +237,8 @@ class VaultMCPServer:
                 self.json = True
                 self.from_only = False
                 self.to_only = False
-        
-        import io
-        from contextlib import redirect_stdout
-        f = io.StringIO()
-        with redirect_stdout(f):
-            vault.cmd_links(MockArgs(note), idx)
-
-        return {
-            "content": [{"type": "text", "text": f.getvalue()}]
-        }
+        return self._call_capturing(vault.cmd_links, MockArgs(note), idx,
+                                    f"Not found: {note}")
 
     def _ensure_semantic(self, idx):
         """Load the embedding model + vector store once per process. Returns

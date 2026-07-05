@@ -182,6 +182,19 @@ class IncrementalTests(EmbedTestCase):
         self.assertEqual(stats["embedded"], len(FIXTURES))
         self.assertEqual(stats["unchanged"], 0)
 
+    def test_moved_note_updates_stored_path(self):
+        # Same content, new path (unique-stem key unchanged): must re-chunk so the
+        # stored chunks carry the new path instead of serving the old one forever.
+        self.build()
+        (self.tmp / "areas/hw").mkdir(parents=True, exist_ok=True)
+        (self.tmp / "areas/accelerator.md").rename(self.tmp / "areas/hw/accelerator.md")
+        stats = self.build()
+        self.assertEqual(stats["embedded"], 1)          # re-embedded despite same body
+        _, meta = vault_embed.load_store(self.tmp)
+        acc_paths = {c["path"] for c in meta["chunks"] if c["key"] == "accelerator"}
+        self.assertEqual(acc_paths, {"areas/hw/accelerator.md"})
+        self.assertEqual(meta["paths"]["accelerator"], "areas/hw/accelerator.md")
+
 
 # ---------------------------------------------------------------- search ----
 

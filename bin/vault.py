@@ -386,12 +386,14 @@ def resolve_key(idx: dict, name: str) -> str | None:
         k = normalize_key(name)
     if k in idx["notes"]:
         return k
-    # Try bare stem against all qualified keys
-    matches = [nk for nk in idx["notes"] if nk.rsplit("/", 1)[-1] == k]
+    # Trailing-component (path-suffix) match: bare "spec" resolves any single note
+    # ending in that stem; "v1/spec" resolves "impl/v1/spec" when unambiguous.
+    q = k.split("/")
+    matches = [nk for nk in idx["notes"] if nk.split("/")[-len(q):] == q]
     if len(matches) == 1:
         return matches[0]
     if len(matches) > 1:
-        print(f"Ambiguous: '{name}' matches {matches}. Qualify with folder/note.", file=sys.stderr)
+        print(f"Ambiguous: '{name}' matches {matches}. Qualify with more folder levels.", file=sys.stderr)
         return None
     # Try title match
     for nk, n in idx["notes"].items():

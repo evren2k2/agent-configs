@@ -69,5 +69,8 @@ if [ -f "$FILE_PATH" ]; then
 fi
 
 if [ -n "$ERRORS" ]; then
-    echo -e "VAULT WRITE VALIDATION FAILED for $BASENAME:\n$ERRORS\nFix these issues in the file you just wrote."
+    # PostToolUse plain stdout is invisible to the model; emit additionalContext
+    # JSON (exit 0, non-blocking) so Claude actually sees the validation result.
+    MSG=$(printf 'VAULT WRITE VALIDATION FAILED for %s:\n%b\nFix these issues in the file you just wrote.' "$BASENAME" "$ERRORS")
+    python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":sys.argv[1]}}))' "$MSG"
 fi

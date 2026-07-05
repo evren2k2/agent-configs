@@ -6,9 +6,11 @@
 # Claude Code sends a JSON payload to stdin. We read it to check why this hook fired.
 INPUT=$(cat)
 
-# Check if the trigger was automated by the agent loop.
-# If it was "auto", we output a dummy success JSON and exit immediately to save resources.
-if echo "$INPUT" | grep -q '"trigger": "auto"'; then
+# Check if the trigger was automated by the agent loop. Node serializes the
+# payload without a space ("trigger":"auto"), so the old space-sensitive grep
+# never matched and the heavy snapshot ran on every auto-compaction. Parse JSON.
+TRIGGER=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('trigger',''))" 2>/dev/null)
+if [ "$TRIGGER" = "auto" ]; then
     echo '{"status": "skipped_auto"}'
     exit 0
 fi
@@ -32,19 +34,12 @@ $SEPARATOR
 
 ### Git State
 $(
-    # Dynamically find repositories to check:
-    # 1. The vault itself
-    # 2. Sibling directories of the vault that match names in projects/
+    # Repos to snapshot: the vault + the current working repo only. Scanning every
+    # repo under $HOME (the old behavior) blew the 10s hook timeout on NFS homes.
     REPOS="$VAULT"
-    # Find Git repositories in HOME and see if they match a vault project
-    for REPO_DIR in "$HOME"/*/; do
-        [ -d "$REPO_DIR/.git" ] || continue
-        REPO_NAME=$(basename "$REPO_DIR")
-        MAPPED_NAME=$(echo "$REPO_NAME" | sed -e 's/ /-/g' -e 's/_/-/g' | tr '[:upper:]' '[:lower:]' | sed -e 's/--/-/g')
-        if [ -d "$VAULT/projects/$MAPPED_NAME" ]; then
-            REPOS="$REPOS $REPO_DIR"
-        fi
-    done
+    if [ -d "$PWD/.git" ] && [ "$PWD" != "$VAULT" ]; then
+        REPOS="$REPOS $PWD"
+    fi
 
     for REPO in $REPOS; do
         if [ -d "$REPO/.git" ]; then

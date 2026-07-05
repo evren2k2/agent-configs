@@ -658,6 +658,22 @@ class DeepHierarchyTests(unittest.TestCase):
         idx = vault.load_index(v)
         self.assertEqual({"a/v1/spec", "b/v1/spec", "c/w2/spec"}, set(idx["notes"]))
 
+    def test_resolve_deep_key_by_unique_suffix(self):
+        # `vault show w2/spec` must resolve the depth-2 key "c/w2/spec" via a unique
+        # trailing-path suffix — the old code dead-ended because it only matched the
+        # final component and "w2/spec" != "spec". Ambiguous suffixes stay None.
+        v = self.tmp / "_rk"
+        for rel in ("projects/p/a/v1/spec.md", "projects/p/b/v1/spec.md",
+                    "projects/p/c/w2/spec.md"):
+            fp = v / rel
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(_note("p", link="x"), encoding="utf-8")
+        idx = vault.load_index(v)
+        self.assertEqual(vault.resolve_key(idx, "w2/spec"), "c/w2/spec")    # unique suffix
+        self.assertEqual(vault.resolve_key(idx, "c/w2/spec"), "c/w2/spec")  # exact key
+        with redirect_stderr(io.StringIO()):
+            self.assertIsNone(vault.resolve_key(idx, "v1/spec"))            # ambiguous
+
 
 if __name__ == "__main__":
     unittest.main()

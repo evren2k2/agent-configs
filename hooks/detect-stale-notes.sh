@@ -42,5 +42,6 @@ esac
 
 
 if [ -n "$REMINDER" ]; then
-    echo "STALE NOTE WARNING: $REMINDER"
+    # PostToolUse plain stdout is invisible to the model; emit additionalContext JSON.
+    python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"STALE NOTE WARNING: "+sys.argv[1]}}))' "$REMINDER"
 fi

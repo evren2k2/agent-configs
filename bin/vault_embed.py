@@ -225,7 +225,13 @@ def build_vectors(vault_path, index: dict, model_name: str = DEFAULT_MODEL,
 
     old_hashes = old_meta.get("hashes", {})
     old_chunks = old_meta.get("chunks", [])
-    unchanged = {k for k in current if old_hashes.get(k) == current[k][2]}
+    # Fall back to chunk paths for stores written before "paths" was tracked.
+    old_paths = old_meta.get("paths") or {cd["key"]: cd["path"] for cd in old_chunks}
+    # Unchanged only if BOTH the body hash AND the path match — a move (same
+    # content, new path) must re-chunk so stored chunks carry the current path.
+    unchanged = {k for k in current
+                 if old_hashes.get(k) == current[k][2]
+                 and old_paths.get(k) == current[k][1]}
     changed = [k for k in current if k not in unchanged]
     removed = [k for k in old_hashes if k not in current]
 
@@ -291,6 +297,7 @@ def build_vectors(vault_path, index: dict, model_name: str = DEFAULT_MODEL,
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "chunks": all_chunks,
         "hashes": {k: current[k][2] for k in current},
+        "paths": {k: current[k][1] for k in current},
     }
     _save_store(vault_path, new_vectors, meta)
     return {"embedded": len(changed), "removed": len(removed),
