@@ -1,8 +1,8 @@
 # Agent Configs
 
-A centralized repository for shared configurations, rules, and skills for **Claude Code**, **Antigravity CLI** (`agy`), and **Gemini CLI**.
+A centralized repository for shared configurations, rules, and skills for **Claude Code** and **Antigravity CLI** (`agy`).
 
-> Google is transitioning Gemini CLI into Antigravity CLI; Gemini CLI service to AI Pro/Ultra ends June 18, 2026. This repo now wires both side-by-side so the migration is incremental — `.gemini/` continues to serve gemini-cli while `.antigravity/` populates the agy plugin tree.
+> Gemini CLI support was retired after Google deprecated it (service to AI Pro/Ultra ended June 18, 2026). `.antigravity/` is now the single Google-side config tree; `agy` still lives under `~/.gemini/`, so paths like `~/.gemini/antigravity-cli/` and `~/.gemini/config/mcp_config.json` below refer to agy, not gemini-cli.
 
 ## Structure
 
@@ -10,11 +10,7 @@ A centralized repository for shared configurations, rules, and skills for **Clau
 - `.antigravity/plugins/`: Plugin packages for Antigravity CLI (`~/.gemini/antigravity-cli/plugins/`)
   - `obsidian/`: vault-related skills + vault-mcp server + hooks
   - `general/`: general behavioral skills (no MCP, no hooks)
-- `.gemini/`: Configuration for Gemini CLI (`~/.gemini/`)
-  - `rules/`: Custom behavioral rules.
-  - `skills/`: Specialized agent skills.
-  - `policies/`: Custom security and tool-access policies.
-- `hooks/`: Shared shell scripts for session management and vault validation. Referenced by both gemini-cli and antigravity hook configs.
+- `hooks/`: Shared shell scripts for session management and vault validation. Referenced by the Claude Code and antigravity hook configs.
 - `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (empty by default — see [Santa Method](#santa-method-optional-adversarial-review)).
 - `bin/`: the `vault` CLI, the `vault-mcp` server, and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status` / `init-vault`).
 - `setup-graphify.py`: optional, independent installer for the graphify code-knowledge-graph integration (separate from the vault install).
@@ -45,7 +41,7 @@ irm https://antigravity.google/cli/install.ps1 | iex
 ```
 The Windows installer drops the binary at `%LOCALAPPDATA%\agy\bin\agy.exe` and appends it to the user PATH. Restart your terminal after installing.
 
-**Claude Code** and **Gemini CLI** install per their respective docs (`npm install -g @anthropic/claude-code`, `npm install -g @google/gemini-cli`).
+**Claude Code** installs per its docs (`npm install -g @anthropic/claude-code`).
 
 ### 2. Link Configurations
 Clone this repository into your home directory (or any preferred location), then run the installer — a single cross-platform Python tool (`bin/agentcfg`) that replaces the old `setup.sh`/`setup.ps1`:
@@ -54,7 +50,7 @@ Clone this repository into your home directory (or any preferred location), then
 python3 bin/agentcfg install --apply     # omit --apply for a dry-run preview
 ```
 
-It is **non-destructive**: it merges a marked block into an existing `CLAUDE.md`/`GEMINI.md` and deep-merges keys into `settings.json` (never overwriting your own config), and drops per-skill symlinks (copies on locked-down Windows) into your config dirs. Manage it anytime:
+It is **non-destructive**: it merges a marked block into an existing `CLAUDE.md` and deep-merges keys into `settings.json` (never overwriting your own config), and drops per-skill symlinks (copies on locked-down Windows) into your config dirs. Manage it anytime:
 
 ```bash
 agentcfg status               # what's installed / drifted
@@ -87,13 +83,9 @@ Hooks are now managed within this repository in the `hooks/` directory, making i
 - **Compaction Safety:** State persistence before context compression.
 - **Validation:** Vault integrity checks after file edits.
 
-### Managed Policies
-The repository now manages Gemini CLI policies in `.gemini/policies/`. 
-- **Plan Mode Override:** By default, Plan Mode restricts the agent to built-in read-only tools. A custom policy (`allow-vault-plan.toml`) is included to permit the use of `vault_*` read tools during the planning phase, allowing for graph-aware context retrieval without exiting Plan Mode. Claude controls this via `settings.json`
-
 ### Santa Method (optional adversarial review)
 
-`santa-method` is a skill (mirrored across Claude, Gemini, and Antigravity) that gates high-stakes output — pre-tapeout RTL, verification infra, production scripts — behind two independent reviewers that must both PASS before shipping.
+`santa-method` is a skill (mirrored across Claude and Antigravity) that gates high-stakes output — pre-tapeout RTL, verification infra, production scripts — behind two independent reviewers that must both PASS before shipping.
 
 It is **off by default and never surfaced** until you configure a reviewer backend. Reviewers live in the shared `santa-method.json` at the repo root:
 
@@ -104,7 +96,7 @@ It is **off by default and never surfaced** until you configure a reviewer backe
 ] }
 ```
 
-While `reviewers` is empty, `session-start.sh` emits nothing about santa and the skill stays dormant. Add one or more entries — the skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command` — to activate it across all three agents at once. See any agent's `santa-method` SKILL.md for the full method (two divergent angles, both-PASS gate, ≤3 iterations).
+While `reviewers` is empty, `session-start.sh` emits nothing about santa and the skill stays dormant. Add one or more entries — the skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command` — to activate it across both agents at once. See any agent's `santa-method` SKILL.md for the full method (two divergent angles, both-PASS gate, ≤3 iterations).
 
 ### Antigravity CLI plugins
 
@@ -130,17 +122,17 @@ Two plugins ship in this repo:
 - **`obsidian`** — `vault-mcp` server + obsidian-notes / obsidian-audit / project-archaeology / checkpoint / obsidian-vault-rules skills + all session/post-tool hooks
 - **`general`** — architect-interview + behavioral-guidelines + paper-outline + santa-method skills (no MCP, no hooks)
 
-**Hook event mapping (Antigravity CLI v1.0.0):**
+**Hook events (Antigravity CLI v1.0.0):**
 
-Confirmed event names per the `/hooks` panel in agy v1.0.0: `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`. Mapping in `.antigravity/plugins/obsidian/hooks/hooks.json`:
-- Gemini `SessionStart` → agy `PreInvocation` *(fires before every LLM invocation, not once per session — `session-start.sh` should be idempotent or self-throttle)*
-- Gemini `AfterTool` with matchers `write_file` / `replace` → agy `PostToolUse` with matchers `Write` / `Edit`
-- Gemini `SessionEnd` → agy `Stop`
-- Gemini `PreCompress` → **no direct analog.** Run `bash ~/agent-configs/hooks/pre-compact.sh` manually before `/compact` if needed.
+Confirmed event names per the `/hooks` panel in agy v1.0.0: `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`. Bindings in `.antigravity/plugins/obsidian/hooks/hooks.json`:
+- `PreInvocation` → `session-start.sh` *(fires before every LLM invocation, not once per session — the script must stay idempotent / self-throttling)*
+- `PostToolUse` with matchers `Write` / `Edit` → vault validators
+- `Stop` → `session-stop.sh`
+- Pre-compaction has **no agy event.** Run `bash ~/agent-configs/hooks/pre-compact.sh` manually before `/compact` if needed.
 
-If a hook isn't firing after migration, double-check the event name against `/hooks` in your agy session, then re-validate with `agy plugin validate ~/.gemini/antigravity-cli/plugins/obsidian`.
+If a hook isn't firing, double-check the event name against `/hooks` in your agy session, then re-validate with `agy plugin validate ~/.gemini/antigravity-cli/plugins/obsidian`.
 
-**Skill duplication during migration:** The vault skills currently exist in both `.gemini/skills/` and `.antigravity/plugins/obsidian/skills/` so Gemini CLI keeps working through its sunset date. When `.gemini/` is retired, the antigravity copy becomes the single source of truth.
+**Single source of truth:** with gemini-cli retired, `.antigravity/plugins/obsidian/skills/` is the only Google-side copy of the vault skills (Claude's copies live in `.claude/skills/`).
 
 ## Synchronization (Automation)
 

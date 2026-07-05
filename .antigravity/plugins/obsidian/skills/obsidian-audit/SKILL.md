@@ -161,8 +161,8 @@ Read `agent/connections.md`:
 
 ### 14. CLAUDE.md / Rules Freshness
 
-- Does `~/.gemini/GEMINI.md` accurately reflect current vault structure?
-- Does `~/.gemini/rules/obsidian-notes.md` match actual conventions being followed?
+- Does the `obsidian-vault-rules` skill accurately reflect current vault structure?
+- Do the plugin's skills match actual conventions being followed?
 - Are any instructions stale or contradictory?
 
 ---

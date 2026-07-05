@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Gemini uses different compacting logic than claude. Need to ensure that this hook is only called for manual compacts
+# Only snapshot on manual compacts — skip the agent loop's automatic ones.
 
-# --- Capture Gemini CLI JSON Input ---
-# Gemini sends a JSON payload to stdin. We read it to check why this hook fired.
+# --- Capture hook JSON input ---
+# Claude Code sends a JSON payload to stdin. We read it to check why this hook fired.
 INPUT=$(cat)
 
 # Check if the trigger was automated by the agent loop.
@@ -95,7 +95,7 @@ else
     echo "$ENTRY" > "$SNAPSHOT"
 fi
 
-# --- Minimal output: routed to STDERR (>&2) so it doesn't break Gemini's parser ---
+# --- Minimal output: routed to STDERR (>&2) so it doesn't pollute the hook's stdout JSON ---
 echo "Compacted. Snapshot saved to vault." >&2
 echo "" >&2
 
@@ -119,5 +119,5 @@ else
     echo "No checkpoints found. Recover from git log + file reads." >&2
 fi
 
-# --- Final JSON Output for Gemini CLI Parser ---
+# --- Final JSON output for the hook parser ---
 echo '{"status": "success"}'

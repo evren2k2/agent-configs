@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""setup-graphify.py — install the graphify code knowledge graph for Claude Code + Gemini CLI.
+"""setup-graphify.py — install the graphify code knowledge graph for Claude Code.
 
 Deliberately STANDALONE and SEPARATE from the vault installer (bin/agentcfg) so the two
 stay modular — a graphify-only user never needs the vault tool, and vice versa:
@@ -15,7 +15,7 @@ Env overrides:
   GRAPHIFY_VENV     venv location              (default ~/.graphify-venv)
   GRAPHIFY_BIN_DIR  PATH dir for the symlinks  (default ~/.local/bin)
   GRAPHIFY_PKG      pip target                 (default graphifyy[mcp]; set a local path for a clone)
-  PLATFORMS         assistants to wire up      (default "claude gemini"; agy excluded — no per-project MCP)
+  PLATFORMS         assistants to wire up      (default "claude"; agy excluded — no per-project MCP)
 """
 import json, os, subprocess, sys
 from pathlib import Path
@@ -25,7 +25,7 @@ WIN = os.name == "nt"
 VENV = Path(os.environ.get("GRAPHIFY_VENV", HOME / ".graphify-venv"))
 BIN_DIR = Path(os.environ.get("GRAPHIFY_BIN_DIR", HOME / ".local/bin"))
 PKG = os.environ.get("GRAPHIFY_PKG", "graphifyy[mcp]")
-PLATFORMS = os.environ.get("PLATFORMS", "claude gemini").split()
+PLATFORMS = os.environ.get("PLATFORMS", "claude").split()
 VENV_BIN = VENV / ("Scripts" if WIN else "bin")
 VENV_PY = VENV_BIN / ("python.exe" if WIN else "python")
 GRAPHIFY = VENV_BIN / ("graphify.exe" if WIN else "graphify")
@@ -74,7 +74,7 @@ def _merge_server(path: Path, key: str, val: dict):
 
 def register_project(project: Path):
     print(f"[graphify] registering in {project} for: {' '.join(PLATFORMS)}")
-    # graphify's own installer: skill + CLAUDE.md/GEMINI.md section + PreToolUse/BeforeTool hooks
+    # graphify's own installer: skill + CLAUDE.md section + PreToolUse hooks
     for p in PLATFORMS:
         run([GRAPHIFY, p, "install", "--project"], cwd=project)
     # MCP server registration (launcher, project-relative graph), preserving existing servers
@@ -87,8 +87,6 @@ def register_project(project: Path):
             en.append("graphify")
         slp.parent.mkdir(parents=True, exist_ok=True)
         slp.write_text(json.dumps(s, indent=2) + "\n", encoding="utf-8")
-    if "gemini" in PLATFORMS:
-        _merge_server(project / ".gemini" / "settings.json", "graphify", _server(trust=True))
     # keep build artifacts out of git
     gi = project / ".gitignore"
     lines = gi.read_text(encoding="utf-8").splitlines() if gi.exists() else []

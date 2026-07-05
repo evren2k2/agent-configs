@@ -44,7 +44,7 @@ if [ ! -f "$TIMELINE_FILE" ]; then
     {
         echo "---"
         echo "date: $(date '+%Y-%m-%d')"
-        echo "tags: [claude_util, gemini_util, timeline]"
+        echo "tags: [agent_util, timeline]"
         echo "type: log"
         echo "status: active"
         # Genuine project logs carry project: so frontmatter queries find them

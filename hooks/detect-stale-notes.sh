@@ -19,16 +19,16 @@ REMINDER=""
 
 # Map: instruction stack files -> vault notes that document them
 case "$FILE_PATH" in
-    */.claude/CLAUDE.md|*/.claude/rules/obsidian-notes.md|*/.gemini/GEMINI.md|*/.gemini/rules/obsidian-notes.md)
+    */.claude/CLAUDE.md|*/.claude/rules/obsidian-notes.md)
         REMINDER="You just modified an instruction stack file. Update your vault's system architecture notes if the change affects the documented architecture."
         ;;
-    */.claude/skills/obsidian-notes/SKILL.md|*/.gemini/skills/obsidian-notes/SKILL.md)
+    */skills/obsidian-notes/SKILL.md)
         REMINDER="You just modified the obsidian-notes skill. Update your vault's pattern and architecture documentation if behaviors changed."
         ;;
-    */.claude/skills/obsidian-audit/SKILL.md|*/.gemini/skills/obsidian-audit/SKILL.md)
+    */skills/obsidian-audit/SKILL.md)
         REMINDER="You just modified the obsidian-audit skill. Update vault audit criteria documentation if needed."
         ;;
-    */.claude/settings.json|*/.gemini/settings.json)
+    */.claude/settings.json)
         REMINDER="You just modified settings.json (hooks config). Ensure your vault's setup guide reflects these changes."
         ;;
     */obsidian_notes/scripts/session-start.sh|*/obsidian_notes/scripts/validate-vault-write.sh|*/obsidian_notes/scripts/session-stop.sh|*/obsidian_notes/scripts/pre-compact.sh)

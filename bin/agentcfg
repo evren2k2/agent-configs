@@ -3,11 +3,11 @@
 
 NON-DESTRUCTIVE (graphify-style): never overwrites a user's existing global config.
 Per-artifact strategy:
-  - shared config FILES (CLAUDE.md, GEMINI.md) -> MERGE a marked block, keep the rest
+  - shared config FILES (CLAUDE.md)            -> MERGE a marked block, keep the rest
   - shared config JSON  (settings.json)        -> DEEP-MERGE our keys (never delete theirs), .orig backup
-  - collection DIRS (skills, rules, policies)  -> per-ITEM symlink (drop ours in, keep the user's)
+  - collection DIRS (skills, rules)            -> per-ITEM symlink (drop ours in, keep the user's)
   - our namespace (~/.agent-configs, agy plugins) -> symlink
-  - MCP servers -> `claude mcp add/remove --scope user` + gemini config merge (already additive)
+  - MCP servers -> `claude mcp add/remove --scope user` + agy config merge (already additive)
 
 Merged files are COPIES, so re-run `agentcfg update` after editing repo CLAUDE.md/settings.json.
 Per-item dir symlinks stay LIVE (edit the repo -> active everywhere, no re-sync).
@@ -25,7 +25,8 @@ from pathlib import Path
 HOME = Path.home()
 REPO = Path(__file__).resolve().parent.parent
 BIN_DIR = REPO / "bin"
-GEMINI_MCP_CONFIG = HOME / ".gemini" / "config" / "mcp_config.json"
+# agy brain/edit mode reads this file; agy lives under ~/.gemini (not gemini-cli, which is retired)
+AGY_MCP_CONFIG = HOME / ".gemini" / "config" / "mcp_config.json"
 PATH_MARKER = "# Added by agent-configs"
 MD_BEGIN = "<!-- BEGIN agent-configs (managed — edit the repo, run `agentcfg update`) -->"
 MD_END = "<!-- END agent-configs -->"
@@ -41,12 +42,10 @@ MANIFEST = HOME / ".agent-configs-installed.json"   # tracks copy-placed paths f
 REQUIREMENTS = REPO / "requirements.txt"
 VAULT = HOME / "obsidian_notes"
 
-AGENTS = ["claude", "gemini"]
-MD_FILES = [(REPO / ".claude/CLAUDE.md", HOME / ".claude/CLAUDE.md"),
-            (REPO / ".gemini/GEMINI.md", HOME / ".gemini/GEMINI.md")]
-JSON_FILES = [(REPO / ".claude/settings.json", HOME / ".claude/settings.json"),
-              (REPO / ".gemini/settings.json", HOME / ".gemini/settings.json")]
-ITEM_DIRS = [(REPO / f".{a}/{d}", HOME / f".{a}/{d}") for a in AGENTS for d in ("rules", "skills", "policies")]
+AGENTS = ["claude"]
+MD_FILES = [(REPO / ".claude/CLAUDE.md", HOME / ".claude/CLAUDE.md")]
+JSON_FILES = [(REPO / ".claude/settings.json", HOME / ".claude/settings.json")]
+ITEM_DIRS = [(REPO / f".{a}/{d}", HOME / f".{a}/{d}") for a in AGENTS for d in ("rules", "skills")]
 
 C = {"ok": "\033[32m", "warn": "\033[33m", "bad": "\033[31m", "dim": "\033[2m", "end": "\033[0m"}
 def c(s, k): return f"{C[k]}{s}{C['end']}" if sys.stdout.isatty() else s
@@ -113,9 +112,9 @@ def claude_user_has(name: str) -> bool:
     except Exception:
         return False
 
-def gemini_mcp_has(name: str) -> bool:
+def agy_mcp_has(name: str) -> bool:
     try:
-        return name in json.loads(GEMINI_MCP_CONFIG.read_text(encoding="utf-8")).get("mcpServers", {})
+        return name in json.loads(AGY_MCP_CONFIG.read_text(encoding="utf-8")).get("mcpServers", {})
     except Exception:
         return False
 
@@ -276,7 +275,7 @@ def cmd_status():
         print(f"  [{c(link_state(src,dest),'ok' if link_state(src,dest)=='ok' else 'warn')}] {dest}")
     print("\nMCP / PATH / agy:")
     print(f"  [{c('ok','ok') if claude_user_has('vault-mcp') else c('missing','warn')}] vault-mcp @ Claude user scope")
-    print(f"  [{c('ok','ok') if gemini_mcp_has('vault-mcp') else c('missing','warn')}] vault-mcp @ {GEMINI_MCP_CONFIG}")
+    print(f"  [{c('ok','ok') if agy_mcp_has('vault-mcp') else c('missing','warn')}] vault-mcp @ {AGY_MCP_CONFIG}")
     print(f"  [{c('ok','ok') if path_rc() else c('missing','warn')}] {BIN_DIR} on PATH")
     for n in agy_plugins():
         print(f"  [{c('ok','ok') if agy_registered(n) else c('missing','warn')}] agy plugin '{n}'")
@@ -314,9 +313,9 @@ def cmd_install(apply):
         _do(apply, "claude mcp add --scope user vault-mcp",
             lambda: subprocess.run(["claude","mcp","add","--scope","user","--transport","stdio",
                                     "vault-mcp","--","bash","-c",VAULT_LAUNCHER], check=True))
-    if not gemini_mcp_has("vault-mcp"):
-        _do(apply, f"merge vault-mcp into {GEMINI_MCP_CONFIG}",
-            lambda: apply_json_key(GEMINI_MCP_CONFIG, "vault-mcp",
+    if not agy_mcp_has("vault-mcp"):
+        _do(apply, f"merge vault-mcp into {AGY_MCP_CONFIG}",
+            lambda: apply_json_key(AGY_MCP_CONFIG, "vault-mcp",
                                    {"command":"bash","args":["-c",VAULT_LAUNCHER],"trust":True}))
     if not path_rc():
         _do(apply, f"add {BIN_DIR} to PATH", _add_path)
@@ -364,8 +363,8 @@ def cmd_uninstall(apply):
     if claude_user_has("vault-mcp"):
         _do(apply, "claude mcp remove vault-mcp --scope user",
             lambda: subprocess.run(["claude","mcp","remove","vault-mcp","--scope","user"], check=True))
-    if gemini_mcp_has("vault-mcp"):
-        _do(apply, f"remove vault-mcp key from {GEMINI_MCP_CONFIG}", lambda: _json_del_key(GEMINI_MCP_CONFIG,"vault-mcp"))
+    if agy_mcp_has("vault-mcp"):
+        _do(apply, f"remove vault-mcp key from {AGY_MCP_CONFIG}", lambda: _json_del_key(AGY_MCP_CONFIG,"vault-mcp"))
     rc = path_rc()
     if rc:
         _do(apply, f"strip PATH lines from {rc}", lambda r=rc: _strip_path(r))
