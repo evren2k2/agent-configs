@@ -11,9 +11,10 @@ A centralized repository for shared configurations, rules, and skills for **Clau
   - `obsidian/`: vault-related skills + vault-mcp server + hooks
   - `general/`: general behavioral skills (no MCP, no hooks)
 - `hooks/`: Shared shell scripts for session management and vault validation. Referenced by the Claude Code and antigravity hook configs.
-- `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (empty by default — see [Santa Method](#santa-method-optional-adversarial-review)).
-- `bin/`: the `vault` CLI, the `vault-mcp` server, and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status` / `init-vault`).
-- `setup-graphify.py`: optional, independent installer for the graphify code-knowledge-graph integration (separate from the vault install).
+- `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (ships with two subscription-CLI reviewers — see [Santa Method](#santa-method-optional-adversarial-review)).
+- `bin/`: the `vault` CLI, the `vault-mcp` server (launched via `vault-mcp-launcher.sh` / `.cmd`), and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status` / `init-vault`).
+- `setup-graphify.py`: optional, independent installer for the graphify code-knowledge-graph integration (Claude-only, separate from the vault install).
+- `tests/`: unit tests for the vault engine, embeddings, and installer — run with `python3 -m unittest tests.test_vault tests.test_embed tests.test_agentcfg`.
 
 ## Requirements
 
@@ -80,14 +81,16 @@ Then follow the printed instructions to link it to a private GitHub repository.
 ### Centralized Hooks
 Hooks are now managed within this repository in the `hooks/` directory, making it easier to update logic across all agent configurations. These hooks handle:
 - **Session Lifecycle:** Context loading and cleanup.
-- **Compaction Safety:** State persistence before context compression.
-- **Validation:** Vault integrity checks after file edits.
+- **Compaction Safety:** State persistence before context compression (manual compacts only; automatic ones are skipped).
+- **Validation:** Vault integrity checks after file edits, surfaced back to the model as hook feedback (`additionalContext`), not just logged.
 
 ### Santa Method (optional adversarial review)
 
 `santa-method` is a skill (mirrored across Claude and Antigravity) that gates high-stakes output — pre-tapeout RTL, verification infra, production scripts — behind two independent reviewers that must both PASS before shipping.
 
-It is **off by default and never surfaced** until you configure a reviewer backend. Reviewers live in the shared `santa-method.json` at the repo root:
+Reviewers live in the shared `santa-method.json` at the repo root. The repo **ships with two subscription-CLI backends configured** (no API keys needed): `agy -p` and `claude -p --model opus` (the pinned model avoids an advisor/model clash in nested sessions and adds cross-model diversity). The skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command`.
+
+To **disable** santa, set `"reviewers": []` — `session-start.sh` then emits nothing about santa and the skill stays dormant. To use a different backend, replace an entry; e.g. codex via the openai-codex plugin:
 
 ```json
 { "reviewers": [
@@ -96,7 +99,7 @@ It is **off by default and never surfaced** until you configure a reviewer backe
 ] }
 ```
 
-While `reviewers` is empty, `session-start.sh` emits nothing about santa and the skill stays dormant. Add one or more entries — the skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command` — to activate it across both agents at once. See any agent's `santa-method` SKILL.md for the full method (two divergent angles, both-PASS gate, ≤3 iterations).
+See any agent's `santa-method` SKILL.md for the full method (two divergent angles, both-PASS gate, ≤3 iterations).
 
 ### Antigravity CLI plugins
 
@@ -128,7 +131,7 @@ Confirmed event names per the `/hooks` panel in agy v1.0.0: `PreToolUse`, `PostT
 - `PreInvocation` → `session-start.sh` *(fires before every LLM invocation, not once per session — the script must stay idempotent / self-throttling)*
 - `PostToolUse` with matchers `Write` / `Edit` → vault validators
 - `Stop` → `session-stop.sh`
-- Pre-compaction has **no agy event.** Run `bash ~/agent-configs/hooks/pre-compact.sh` manually before `/compact` if needed.
+- Pre-compaction has **no agy event.** Run `bash ~/.agent-configs/hooks/pre-compact.sh` manually before `/compact` if needed.
 
 If a hook isn't firing, double-check the event name against `/hooks` in your agy session, then re-validate with `agy plugin validate ~/.gemini/antigravity-cli/plugins/obsidian`.
 
@@ -144,8 +147,10 @@ To keep your vault synced across machines, set up an automated task to run the s
 Run `crontab -e` and add the following line to sync every 5 minutes:
 
 ```bash
-*/5 * * * * $HOME/agent-configs/hooks/server-sync.sh > /dev/null 2>&1
+*/5 * * * * $HOME/.agent-configs/hooks/server-sync.sh > /dev/null 2>&1
 ```
+
+(`~/.agent-configs` is the namespace link `agentcfg install` creates, so this works regardless of where the repo is cloned. Overlapping runs are prevented with `flock`, and `sync.log` is rotated automatically.)
 
 #### Windows Task Scheduler (Silent Sync)
 To prevent a PowerShell window from flashing every 5 minutes, use the provided VBScript wrapper.
@@ -154,12 +159,12 @@ To prevent a PowerShell window from flashing every 5 minutes, use the provided V
 2. **Create or Update the Task:** Run the following command in an administrator terminal:
 
 ```powershell
-schtasks /create /sc minute /mo 5 /tn "sync obsidian" /tr "wscript.exe %USERPROFILE%\agent-configs\hooks\silent-sync.vbs" /it /f
+schtasks /create /sc minute /mo 5 /tn "sync obsidian" /tr "wscript.exe %USERPROFILE%\.agent-configs\hooks\silent-sync.vbs" /it /f
 ```
 
 
 - **Program/script:** `wscript.exe`
-- **Add arguments:** `"%USERPROFILE%\agent-configs\hooks\silent-sync.vbs"`
+- **Add arguments:** `"%USERPROFILE%\.agent-configs\hooks\silent-sync.vbs"`
 - **Settings (Critical):**
     - **General:** Select "Run only when user is logged on" (required for Git credential access).
     - **Settings:** Enable "Stop the task if it runs longer than" (set to **2 minutes** via `/k` in the command above).
@@ -171,7 +176,7 @@ If you need to sync immediately, you can run:
 
 **Bash:**
 ```bash
-$HOME/agent-configs/hooks/server-sync.sh
+$HOME/.agent-configs/hooks/server-sync.sh
 ```
 
 **PowerShell:**
@@ -187,5 +192,5 @@ When working with the vault, follow these conventions to ensure agent compatibil
 - **Structure:**
     - `projects/<name>/working-context.md`: Critical for session recovery and project tracking.
     - `areas/`: Long-term knowledge storage.
-- **Git Integration:** If a folder in your home directory matches a project name in `projects/`, the `pre-compact` hook will automatically snapshot that repository's state into your vault.
+- **Git Integration:** On manual compaction, the `pre-compact` hook snapshots the git state of the current working directory and the vault itself into `agent/pre-compact-snapshot.md` (scan deliberately bounded to stay within the hook timeout).
 
