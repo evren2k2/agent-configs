@@ -1,13 +1,4 @@
 {
-  "_comment": "Shared reviewer backends for the santa-method skill (claude / antigravity). Add entries to 'reviewers' to activate it; an empty list keeps santa-method dormant — no agent is told to use it. Each command runs in bash; the skill substitutes {focus} and {files}. Both entries below use subscription CLIs in print mode (no API keys). The claude entry pins --model opus: without it, a nested claude-fable-5 session conflicts with the opus-4-8 advisor config, and a non-fable reviewer adds cross-model diversity.",
-  "reviewers": [
-    {
-      "name": "agy",
-      "command": "agy -p \"Adversarial review — {focus}. Target files: {files}. Read the files and do static analysis only (no edits, no commands that modify state). Hunt for real defects, unstated assumptions, tautological checks, and coverage gaps. Report each finding as file:line with a one-line explanation. End with exactly one line: VERDICT: PASS or VERDICT: FAIL.\""
-    },
-    {
-      "name": "claude",
-      "command": "claude -p --model opus \"Adversarial review — {focus}. Target files: {files}. Read the files and do static analysis only (no edits, no commands that modify state). Hunt for real defects, unstated assumptions, tautological checks, and coverage gaps. Report each finding as file:line with a one-line explanation. End with exactly one line: VERDICT: PASS or VERDICT: FAIL.\""
-    }
-  ]
+  "_comment": "Shared reviewer backends for the santa-method skill (claude / antigravity). OFF by default — an empty list keeps santa-method dormant and no agent is told to use it. To activate on one machine, create a gitignored santa-method.local.json next to this file (it takes precedence); commit entries here only if every user of this repo has that backend. Each command runs in bash; the skill substitutes {focus} and {files}. See any agent's santa-method SKILL.md for the entry format and examples (subscription CLIs like `agy -p` / `claude -p`, or codex).",
+  "reviewers": []
 }

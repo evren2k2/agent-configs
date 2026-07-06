@@ -9,7 +9,7 @@ Two independent reviewers, each with a different angle, must both PASS before ou
 
 ## Step 0 — read the config (required)
 
-Read `~/.agent-configs/santa-method.json`. It defines the reviewer backends:
+Read `~/.agent-configs/santa-method.local.json` if it exists, else `~/.agent-configs/santa-method.json`. It defines the reviewer backends:
 
 ```json
 { "reviewers": [
@@ -17,7 +17,7 @@ Read `~/.agent-configs/santa-method.json`. It defines the reviewer backends:
 ] }
 ```
 
-If `reviewers` is empty or the file is missing, **stop**: tell the user santa-method has no backend configured and point them to that file. Do not invent a reviewer.
+If `reviewers` is empty in both files or they're missing, **stop**: tell the user santa-method has no backend configured and point them to `santa-method.local.json`. Do not invent a reviewer.
 
 ## When to use
 
@@ -47,7 +47,7 @@ Port widths and connectivity · no implicit nets · AXI valid/ready handshakes �
 
 ## Configuring a backend
 
-Add an entry to `reviewers` in `santa-method.json`. Example (codex via the openai-codex plugin):
+Add an entry to `reviewers` — machine-local setups go in the gitignored `santa-method.local.json` (takes precedence); commit to the shared `santa-method.json` only if every user of the repo has that backend. Subscription CLIs work well (`agy -p "..."`, `claude -p --model <model-you-have> "..."` — end the prompt with "End with exactly one line: VERDICT: PASS or VERDICT: FAIL"). Example (codex via the openai-codex plugin):
 
 ```json
 { "reviewers": [

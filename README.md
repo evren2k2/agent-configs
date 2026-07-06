@@ -11,10 +11,9 @@ A centralized repository for shared configurations, rules, and skills for **Clau
   - `obsidian/`: vault-related skills + vault-mcp server + hooks
   - `general/`: general behavioral skills (no MCP, no hooks)
 - `hooks/`: Shared shell scripts for session management and vault validation. Referenced by the Claude Code and antigravity hook configs.
-- `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (ships with two subscription-CLI reviewers — see [Santa Method](#santa-method-optional-adversarial-review)).
+- `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (empty by default; activate per-machine via gitignored `santa-method.local.json` — see [Santa Method](#santa-method-optional-adversarial-review)).
 - `bin/`: the `vault` CLI, the `vault-mcp` server (launched via `vault-mcp-launcher.sh` / `.cmd`), and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status` / `init-vault`).
 - `setup-graphify.py`: optional, independent installer for the graphify code-knowledge-graph integration (Claude-only, separate from the vault install).
-- `tests/`: unit tests for the vault engine, embeddings, and installer — run with `python3 -m unittest tests.test_vault tests.test_embed tests.test_agentcfg`.
 
 ## Requirements
 
@@ -88,18 +87,16 @@ Hooks are now managed within this repository in the `hooks/` directory, making i
 
 `santa-method` is a skill (mirrored across Claude and Antigravity) that gates high-stakes output — pre-tapeout RTL, verification infra, production scripts — behind two independent reviewers that must both PASS before shipping.
 
-Reviewers live in the shared `santa-method.json` at the repo root. The repo **ships with two subscription-CLI backends configured** (no API keys needed): `agy -p` and `claude -p --model opus` (the pinned model avoids an advisor/model clash in nested sessions and adds cross-model diversity). The skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command`.
-
-To **disable** santa, set `"reviewers": []` — `session-start.sh` then emits nothing about santa and the skill stays dormant. To use a different backend, replace an entry; e.g. codex via the openai-codex plugin:
+It is **off by default**: the tracked `santa-method.json` ships with an empty `reviewers` list, so `session-start.sh` emits nothing about santa and the skill stays dormant. To activate it on a machine, create a gitignored **`santa-method.local.json`** next to it (it takes precedence when present) with one or more reviewer entries — the skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command`. Subscription CLIs work without API keys, e.g.:
 
 ```json
 { "reviewers": [
-  { "name": "codex",
-    "command": "CODEX=\"$(find ~/.claude/plugins/cache/openai-codex -name codex-companion.mjs -print -quit)\" && node \"$CODEX\" adversarial-review --wait --scope working-tree --reasoning-effort=high \"{focus} in {files}\"" }
+  { "name": "agy",
+    "command": "agy -p \"Adversarial review — {focus}. Target files: {files}. Static analysis only. End with exactly one line: VERDICT: PASS or VERDICT: FAIL.\"" }
 ] }
 ```
 
-See any agent's `santa-method` SKILL.md for the full method (two divergent angles, both-PASS gate, ≤3 iterations).
+(`claude -p --model <model-you-have> "..."` and codex's `adversarial-review` channel work the same way — see any agent's `santa-method` SKILL.md for the codex example and the full method: two divergent angles, both-PASS gate, ≤3 iterations.)
 
 ### Antigravity CLI plugins
 

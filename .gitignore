@@ -28,6 +28,7 @@
 
 # Local files
 **/settings.local.json
+santa-method.local.json
 
 # Python cache
 **/__pycache__/
