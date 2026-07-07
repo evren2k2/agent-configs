@@ -39,6 +39,20 @@ case "$FILE_PATH" in
     */scripts/*) exit 0 ;;
 esac
 
+# Signal to the Stop hook that meaningful vault work happened. Keyed identically
+# to session-stop.sh so the marker written here is the one it consumes. Set for
+# any real vault note (past the exempt/system/script filters above), whether or
+# not the validation below passes — a write is work either way.
+AKEY=$(echo "$INPUT" | python3 -c "import sys,json,hashlib
+d=json.load(sys.stdin)
+k=d.get('session_id') or d.get('transcript_path') or ''
+print(hashlib.sha256(k.encode()).hexdigest()[:16] if k else '')" 2>/dev/null)
+[ -z "$AKEY" ] && AKEY="day-$(date +%Y-%m-%d)"
+ADIR="${XDG_CACHE_HOME:-$HOME/.cache}/agent-configs/stop-reminders"
+mkdir -p "$ADIR" 2>/dev/null
+find "$ADIR" -type f -mtime +7 -delete 2>/dev/null       # keep the marker dir bounded
+: > "$ADIR/activity-$AKEY"
+
 ERRORS=""
 
 # Check 1: Frontmatter exists
