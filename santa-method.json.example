@@ -1,0 +1,13 @@
+{
+  "_comment": "EXAMPLE reviewer backends for the santa-method skill. On a fresh clone, copy this to the gitignored, machine-local config: `cp santa-method.json.example santa-method.json`. Then delete whichever reviewer's CLI you don't have installed + authed — the skill needs at least one (it runs a single reviewer twice, once per angle) and prefers two divergent ones. Each command runs in bash; the skill substitutes {focus} (the review angle) and {files} (target paths). IMPORTANT: `agy --print-timeout 20m` is deliberate — agy's -p print mode defaults to a 5-minute timeout and will otherwise truncate a long review before the final `VERDICT:` line (the response comes back cut off / with no verdict). Do not drop that flag. The claude entry pins --model opus so a nested session doesn't inherit a conflicting default model, and a non-fable reviewer adds cross-model diversity.",
+  "reviewers": [
+    {
+      "name": "agy",
+      "command": "agy --print-timeout 20m -p \"Adversarial review — {focus}. Target files: {files}. Read the files and do static analysis only (no edits, no commands that modify state). Hunt for real defects, unstated assumptions, tautological checks, and coverage gaps. Report each finding as file:line with a one-line explanation. End with exactly one line: VERDICT: PASS or VERDICT: FAIL.\""
+    },
+    {
+      "name": "claude",
+      "command": "claude -p --model opus \"Adversarial review — {focus}. Target files: {files}. Read the files and do static analysis only (no edits, no commands that modify state). Hunt for real defects, unstated assumptions, tautological checks, and coverage gaps. Report each finding as file:line with a one-line explanation. End with exactly one line: VERDICT: PASS or VERDICT: FAIL.\""
+    }
+  ]
+}

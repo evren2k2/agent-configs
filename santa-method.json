@@ -1,4 +1,0 @@
-{
-  "_comment": "Shared reviewer backends for the santa-method skill (claude / antigravity). OFF by default — an empty list keeps santa-method dormant and no agent is told to use it. To activate on one machine, create a gitignored santa-method.local.json next to this file (it takes precedence); commit entries here only if every user of this repo has that backend. Each command runs in bash; the skill substitutes {focus} and {files}. See any agent's santa-method SKILL.md for the entry format and examples (subscription CLIs like `agy -p` / `claude -p`, or codex).",
-  "reviewers": []
-}

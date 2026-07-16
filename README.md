@@ -11,7 +11,7 @@ A centralized repository for shared configurations, rules, and skills for **Clau
   - `obsidian/`: vault-related skills + vault-mcp server + hooks
   - `general/`: general behavioral skills (no MCP, no hooks)
 - `hooks/`: Shared shell scripts for session management and vault validation. Referenced by the Claude Code and antigravity hook configs.
-- `santa-method.json`: Shared reviewer config for the optional `santa-method` skill (empty by default; activate per-machine via gitignored `santa-method.local.json` — see [Santa Method](#santa-method-optional-adversarial-review)).
+- `santa-method.json.example`: Template reviewer config for the optional `santa-method` skill; copy to the gitignored, machine-local `santa-method.json` to activate — see [Santa Method](#santa-method-optional-adversarial-review).
 - `bin/`: the `vault` CLI, the `vault-mcp` server (launched via `vault-mcp-launcher.sh` / `.cmd`), and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status` / `init-vault`).
 - `setup-graphify.py`: optional, independent installer for the graphify code-knowledge-graph integration (Claude-only, separate from the vault install).
 
@@ -87,14 +87,22 @@ Hooks are now managed within this repository in the `hooks/` directory, making i
 
 `santa-method` is a skill (mirrored across Claude and Antigravity) that gates high-stakes output — pre-tapeout RTL, verification infra, production scripts — behind two independent reviewers that must both PASS before shipping.
 
-It is **off by default**: the tracked `santa-method.json` ships with an empty `reviewers` list, so `session-start.sh` emits nothing about santa and the skill stays dormant. To activate it on a machine, create a gitignored **`santa-method.local.json`** next to it (it takes precedence when present) with one or more reviewer entries — the skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command`. Subscription CLIs work without API keys, e.g.:
+It is **off by default**: `santa-method.json` is gitignored and absent on a fresh clone, so `session-start.sh` emits nothing about santa and the skill stays dormant. To activate it on a machine, copy the tracked template — **`santa-method.json.example`** — to **`santa-method.json`**, then trim it to the reviewer CLIs you actually have installed + authed:
+
+```bash
+cp santa-method.json.example santa-method.json
+```
+
+The skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command`. Subscription CLIs work without API keys; the template ships two divergent reviewers (`agy`, `claude`), e.g.:
 
 ```json
 { "reviewers": [
   { "name": "agy",
-    "command": "agy -p \"Adversarial review — {focus}. Target files: {files}. Static analysis only. End with exactly one line: VERDICT: PASS or VERDICT: FAIL.\"" }
+    "command": "agy --print-timeout 20m -p \"Adversarial review — {focus}. Target files: {files}. Static analysis only. End with exactly one line: VERDICT: PASS or VERDICT: FAIL.\"" }
 ] }
 ```
+
+The `agy --print-timeout 20m` is deliberate — agy's `-p` print mode defaults to a 5-minute timeout and will otherwise cut a long review off before the final `VERDICT:` line (the response comes back truncated, with no verdict). Don't drop that flag. See the *Truncated / incomplete runs* section in any agent's `santa-method` SKILL.md for the full failure mode.
 
 (`claude -p --model <model-you-have> "..."` and codex's `adversarial-review` channel work the same way — see any agent's `santa-method` SKILL.md for the codex example and the full method: two divergent angles, both-PASS gate, ≤3 iterations.)
 

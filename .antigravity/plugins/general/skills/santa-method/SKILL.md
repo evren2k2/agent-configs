@@ -9,7 +9,7 @@ Two independent reviewers, each with a different angle, must both PASS before ou
 
 ## Step 0 — read the config (required)
 
-Read `~/.agent-configs/santa-method.local.json` if it exists, else `~/.agent-configs/santa-method.json`. It defines the reviewer backends:
+Read `~/.agent-configs/santa-method.json` (gitignored, machine-local; copied from the tracked `santa-method.json.example`). It defines the reviewer backends:
 
 ```json
 { "reviewers": [
@@ -17,7 +17,7 @@ Read `~/.agent-configs/santa-method.local.json` if it exists, else `~/.agent-con
 ] }
 ```
 
-If `reviewers` is empty in both files or they're missing, **stop**: tell the user santa-method has no backend configured and point them to `santa-method.local.json`. Do not invent a reviewer.
+If `reviewers` is empty or the file is missing, **stop**: tell the user santa-method has no backend configured — they can `cp santa-method.json.example santa-method.json` and fill in a reviewer. Do not invent a reviewer.
 
 ## When to use
 
@@ -31,9 +31,10 @@ If `reviewers` is empty in both files or they're missing, **stop**: tell the use
    - **A — defects:** bugs, tautological checks, race conditions, protocol violations.
    - **B — design:** tradeoffs, assumptions, failure modes, coverage gaps.
    With ≥2 reviewers in config, use two different ones; with one, run it twice — once per angle.
-3. Run both reviewers **in parallel** as background shell commands (`run_shell_command`). Substitute `{focus}` (the angle) and `{files}` (specific paths) into each `command`.
-4. **Gate:** both PASS → ship. Either FAIL → fix every issue, then re-run fresh (no shared context).
-5. Max 3 iterations, then escalate to the user.
+3. Run both reviewers **in parallel** as background shell commands (`run_shell_command`). Substitute `{focus}` (the angle) and `{files}` (specific paths) into each `command`, and redirect each reviewer's full output to its own log file (append `> /tmp/santa-<name>-<angle>.log 2>&1`) so the verdict is captured whole, not scraped from scrollback.
+4. **Wait for each reviewer to fully exit, then read its log file end-to-end.** Do not judge from a partial/incremental read — the verdict is the LAST line (`VERDICT: PASS` / `VERDICT: FAIL`). If a log ends without a `VERDICT:` line, the run was **truncated, not a verdict** (see *Truncated / incomplete runs*): re-run that reviewer, don't infer PASS/FAIL.
+5. **Gate:** both PASS → ship. Either FAIL → fix every issue, then re-run fresh (no shared context).
+6. Max 3 iterations, then escalate to the user.
 
 ## Signals
 
@@ -41,13 +42,22 @@ If `reviewers` is empty in both files or they're missing, **stop**: tell the use
 - Reviewers do static analysis only — they can't run sims or builds. Run those yourself first.
 - Severity reads hot; a flagged "high" may be a medium.
 
+## Truncated / incomplete runs
+
+A reviewer whose output ends **without** a final `VERDICT:` line did not finish — treat it as a failed run to retry, never as a silent PASS. Two causes, both fixable:
+
+- **The reviewer self-truncated on its own print timeout.** `agy -p` defaults to `--print-timeout 5m0s`; a thorough adversarial review routinely exceeds it, so agy prints a partial response and exits before the verdict. Fix: raise it in the backend command — `agy --print-timeout 20m -p "…"`. (`claude -p` has no such cap.)
+- **The output was read before the process finished.** Reading background scrollback incrementally can catch a partial tail. Fix: redirect each reviewer to a log file (Workflow step 3), wait for full exit, then read the whole file (Workflow step 4).
+
+If a reviewer still truncates after raising its timeout, narrow `{files}` (fewer paths per run) or split the review.
+
 ## RTL / verification checklist
 
 Port widths and connectivity · no implicit nets · AXI valid/ready handshakes · reset values on all flops (no X-prop) · non-trivial SVA covering every handshake · error-path coverage that distinguishes PASS from a pre-silicon bug · CDC synchronizers.
 
 ## Configuring a backend
 
-Add an entry to `reviewers` — machine-local setups go in the gitignored `santa-method.local.json` (takes precedence); commit to the shared `santa-method.json` only if every user of the repo has that backend. Subscription CLIs work well (`agy -p "..."`, `claude -p --model <model-you-have> "..."` — end the prompt with "End with exactly one line: VERDICT: PASS or VERDICT: FAIL"). Example (codex via the openai-codex plugin):
+Add an entry to `reviewers` in the gitignored, machine-local `santa-method.json` (copy it from the tracked `santa-method.json.example`); to share a backend every repo user has, add it to `santa-method.json.example` instead. Subscription CLIs work well (`agy --print-timeout 20m -p "..."`, `claude -p --model <model-you-have> "..."` — end the prompt with "End with exactly one line: VERDICT: PASS or VERDICT: FAIL"). For `agy`, `--print-timeout` matters: its 5-minute default truncates long reviews before the verdict (see *Truncated / incomplete runs*). Example (codex via the openai-codex plugin):
 
 ```json
 { "reviewers": [

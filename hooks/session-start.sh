@@ -50,9 +50,8 @@ else
 fi
 
 # --- Santa Method (surfaced only when a reviewer backend is configured) ---
-# Machine-local override (gitignored) takes precedence over the tracked default.
-SANTA_CONFIG="$HOME/.agent-configs/santa-method.local.json"
-[ -f "$SANTA_CONFIG" ] || SANTA_CONFIG="$HOME/.agent-configs/santa-method.json"
+# Gitignored, machine-local config (copied from the tracked santa-method.json.example).
+SANTA_CONFIG="$HOME/.agent-configs/santa-method.json"
 if [ -f "$SANTA_CONFIG" ] && grep -q '"command"' "$SANTA_CONFIG" 2>/dev/null; then
     echo "Santa Method: reviewer backend configured. For high-stakes output (RTL, verification infra, production scripts), invoke the santa-method skill and pass both reviewers before shipping."
 fi
