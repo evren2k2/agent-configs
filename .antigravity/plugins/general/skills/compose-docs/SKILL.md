@@ -15,14 +15,18 @@ This is the outward-facing sibling of `project-archaeology`. Archaeology mines *
 
 ## Core Principles
 
-1. **Audience is a user, not a maintainer.** Document what someone needs to *call the API and compose a working pipeline*: signatures, parameters, returns, usage, how pieces fit together. Not internal reasoning, not git history, not "why this default was chosen." If a fact only helps a maintainer, it belongs in `project-archaeology`, not here.
+1. **Audience is a user, not a maintainer.** Document what someone needs to *call the API and compose a working pipeline*: signatures, parameters, returns, usage, how pieces fit together. Not internal reasoning, not git history, not "why this default was chosen." If a fact only helps a maintainer, it belongs in `project-archaeology`, not here. When one concern serves two distinct user roles with different (especially opposite) needs — e.g. "using the tool on your own inputs" vs "contributing to the project's curated corpus" — **split the section explicitly by role** with an up-front routing line ("if you are X, read only..."), rather than averaging the audiences into one set of rules.
 2. **Source is ground truth — never document from memory.** Every signature, parameter name, type, default, return value, and property comes from reading the actual source. No interpolation from training data. If you state it in the docs, you read it in the code.
 3. **Theory and conventions are RECONSTRUCTED from the code, never recalled.** This is the defining failure mode of outward docs: derivation/convention/coordinate-system/signal-model sections invite you to write textbook domain knowledge that is *plausible but wrong for THIS code*. A sign convention, normalization, or axis order must match what the code actually computes — derive it from docstrings, comments, the literal computation, and any references the repo cites. If you cannot ground a piece of theory in the source, omit it or mark it explicitly as unverified. Pedagogical completeness is never a license to invent.
-4. **Usage examples are adapted from the repo's own `examples/` and `tests/`, not invented.** These directories usually mirror the submodule layout (`examples/<sub>/`, `tests/<sub>/`). Lift real, working calls from them and trim to a minimal example. Invented snippets are how wrong signatures and impossible argument combinations get into docs. Every example must be runnable.
+4. **Usage examples are adapted from the repo's own `examples/` and `tests/`, not invented.** These directories usually mirror the submodule layout (`examples/<sub>/`, `tests/<sub>/`). Lift real, working calls from them and trim to a minimal example. Invented snippets are how wrong signatures and impossible argument combinations get into docs. Every example must be runnable. **Private-tests mode:** if the repo's test suite is not part of the shipped artifact, docs must not cite `tests/` paths or test file names at all. Instead, lift the verified behavior into the guide as a runnable inline snippet (executed before shipping, per Phase 3) or as prose stating the invariant the private suite enforces. Ask/detect which mode applies before drafting.
 5. **Hierarchical, bottom-up composition.** Document leaf units (classes/functions) → compose them into a per-submodule guide → write the hub last so it links guides that already exist. The doc hierarchy mirrors the package hierarchy: hub → submodule guide → class/function reference.
 6. **Public surface only.** Document what users import — respect the language's export/visibility mechanism (Python `__init__.py` / `__all__`; JS/TS `export`; Rust `pub`; Go capitalization). Private helpers (Python `_leading_underscore`, unexported names, internal modules not re-exported) are excluded unless they are part of the public contract.
 7. **Interactions over inventories.** The highest-value sections are "How the classes interact" and "Data/Signal flow" — how a user wires the pieces into a pipeline. A flat list of classes is a failure; show composition, with concrete shapes/types flowing between stages. When a flow chart or diagram makes the wiring clearer, render it as **mermaid** (preferred — renders natively on GitHub) or **graphviz/DOT** — never ASCII art or an embedded image.
 8. **One coherent voice.** Every guide follows the same template, tone, and ordering so the set reads as one document. Consistency is a feature.
+
+## Doc-Repair Mode
+
+**Doc-repair passes:** when updating existing docs, factual correctness is not the bar — a correct section can still fail Principle 1. Restructure to what/why-before-mechanism, define-before-use, and concrete-example-before-abstraction. Every retained detail must answer "why does the reader need this here?"; details that answer only a maintainer question move out (or to the archaeology layer). Preserve hand-written content that already meets the bar; do not rewrite for rewriting's sake.
 
 ## Scratch Workspace
 
@@ -79,7 +83,7 @@ Write each submodule's findings to `scratch/phase2-<submodule>.md` as you finish
 
 **Steps:**
 1. Read all `scratch/phase2-*.md`.
-2. **Run the usage examples.** Execute the example scripts in `examples/<sub>/` (or the minimal snippets you derived) against the installed/importable package. If a snippet doesn't run, fix it until it does — the broken version never ships.
+2. **Run the usage examples.** Execute the example scripts in `examples/<sub>/` (or the minimal snippets you derived) against the installed/importable package. If a snippet doesn't run, fix it until it does — the broken version never ships. Examples that reference on-disk files (fixture paths, YAML specs, data files) MUST be executed end-to-end, not merely import- or signature-checked — a stale path is invisible to static checks. Any file path appearing in a doc is validated for existence as part of the pre-ship sweep.
 3. **Cross-check signatures.** Confirm every parameter/default/return you recorded matches the source (re-read or introspect). Reconcile any drift.
 4. **Run the tests** you'll cite in "Running Tests" so the documented commands are real and pass (or note known-skips honestly).
 5. For anything that genuinely cannot be executed (needs network, hardware, secrets), keep the example but mark the precondition explicitly (e.g. "requires a configured `spacetrack_config.json`").
@@ -101,10 +105,12 @@ Write each submodule's findings to `scratch/phase2-<submodule>.md` as you finish
 
 `docs/<submodule>.md`. The section list is a **menu ordered by convention**, not a fixed sequence — include the optional sections a submodule warrants, drop the ones it doesn't. Overview, API Reference, Typical Usage, and Running Tests are effectively always present.
 
+**Plain-language opening (required).** Every guide opens with a 3–6 sentence plain-language paragraph answering **WHAT** this layer is, **WHY** it exists (the problem it solves), and **HOW** it fits the pipeline — written for a reader with zero prior knowledge of the repo (assume general domain competence, nothing repo-specific). Every repo-specific term is defined on first use. Test: would a first-time reader stumble on any term in the first two paragraphs?
+
 ```markdown
 # <package> — <Submodule> Submodule Guide
 
-<one-paragraph intro: what this submodule covers, in plain terms>
+<plain-language opening: 3–6 sentences — WHAT this layer is, WHY it exists, HOW it fits the pipeline; every repo-specific term defined on first use (see requirement above)>
 
 ---
 
@@ -223,12 +229,22 @@ Pick one coherent shape per project and hold it across every guide, even where i
 Detailed guides for each submodule. For quickstart and installation, see the
 [root README](../README.md).
 
+## Suggested Reading Order
+1. [<leaf-layer>.md](<leaf-layer>.md) — <foundation; read first>
+2. …
+N. [<orchestration>.md](<orchestration>.md) — <ties it together; read last>
+
+To *use* the tool, read 1 and N; to *contribute*, add the rest.
+
 ## Guides
+Alphabetical lookup — the numbered reading order above is the navigation spine.
 
 | Guide | Description |
 |---|---|
 | [<sub>.md](<sub>.md) | <dense one-liner: key classes + distinguishing capabilities> |
 ```
+
+The hub MUST carry a **numbered suggested reading order** over the guides, ordered foundation-up along the package dependency graph (leaf layers first, orchestration last), with a one-line shortcut for partial audiences (e.g. "to *use* the tool read 1 and 8; to *contribute* add 9"). An alphabetical index may remain as a secondary lookup table, never as the navigation spine.
 
 Hub descriptions must be **dense** — name the key classes and what makes each notable, like `MVDRBF (5 modes), GSCBF (LMS tracking, alpha codebook)`. A vague row (`beamforming utilities`) is a defect.
 
