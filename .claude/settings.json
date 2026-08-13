@@ -2,7 +2,6 @@
   "permissions": {
     "allow": [
       "Read(~/obsidian_notes/**)",
-      "Write(~/obsidian_notes/**)",
       "Edit(~/obsidian_notes/**)",
       "mcp__vault-mcp__vault_find",
       "mcp__vault-mcp__vault_project",
