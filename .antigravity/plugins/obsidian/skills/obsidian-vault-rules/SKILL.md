@@ -5,12 +5,20 @@ description: Required rules for working with the Obsidian vault — tool selecti
 
 # Obsidian Vault Rules
 
-## Context Loading
-At session start, the hook provides the project name and instructs you to use vault MCP tools. Use `vault_project` to enumerate project notes, then read the most relevant 2-3 notes. Do NOT read full vault notes directly in main context.
+## Context Loading — read what is relevant, delegate only breadth
+At session start the hook provides the project name. Use `vault_project` to enumerate, then load by tier.
+
+**Tier 1 — read it yourself, whole.** Notes the query names, plus strong `vault_semantic_search` hits. Read directly while the running total stays under ~20k tokens and each note is under ~8 KB. The median vault note is ~1.7k tokens and 62% are under 2k, so this is the normal path, not an exception.
+
+**Tier 2 — read it yourself, in part.** For notes over ~8 KB (`agent/session-log.md`, `projects/rtlgen/decisions/tradeoffs-and-decisions.md`, `personal/deep-research-llm-for-chips/*`), neither read whole nor delegate: `vault_semantic_search` returns passages with line ranges — read just that range.
+
+**Tier 3 — delegate breadth only.** Sweeping a large project (rtlgen is ~224k tokens across 94 notes) or "what else touches X". Require **pointers plus verbatim quotes of load-bearing lines** back — *"note X lines 40-58 has the timing numbers"* — never a paraphrase of technical values. The subagent routes; it does not compress.
+
+**Never paraphrase a number, flag, path, or error string you could have read verbatim.**
 
 ## Vault Tools (always active — no skill invocation needed)
 
-Five native MCP tools are registered and pre-approved. You MUST use one before `read_file`-ing any vault note.
+Six native MCP tools are registered and pre-approved. You MUST use one before `read_file`-ing any vault note.
 
 | Goal | Tool | Key arg |
 |------|------|---------|
@@ -19,6 +27,7 @@ Five native MCP tools are registered and pre-approved. You MUST use one before `
 | List all notes in a project | `vault_project` | `name` |
 | Inspect a note's metadata + links | `vault_show` | `note` |
 | See who links to/from a note | `vault_links` | `note` |
+| Read a project's last checkpoint(s) verbatim | `vault_checkpoint` | `project` |
 
 **Decision tree:**
 - "I need to explore the current project" → `vault_project` first
@@ -26,14 +35,16 @@ Five native MCP tools are registered and pre-approved. You MUST use one before `
 - "I'm searching by concept/meaning, or want the exact passages discussing X" → `vault_semantic_search` (returns matching paragraphs with file + line range, across all projects; judge hits by the cosine score)
 - "I want to see a note's connections" → `vault_links`
 - "I need note body content" → identify it with a vault tool first, then `read_file`
+- "The note is large and I need one part of it" → `vault_semantic_search`, then read the returned line range — this is Tier 2, and it beats both a whole-file read and a subagent summary
+- "What was I doing here last session?" → `vault_checkpoint(project=…)`, not a `read_file` of `working-context.md`
 - "I need full-text search inside note bodies" → `grep` (last resort only)
 
 **Note key format:** lowercase-hyphenated stems. When a stem is ambiguous across projects, qualify it: `test-project/working-context`.
 
 **Workflow — bootstrap project context:**
 1. `vault_project(name=<project>)` → compact listing of all notes with status/type
-2. Pick 2-3 notes (usually `working-context.md` + highest-priority items)
-3. Small project (≤3 short notes)? `read_file` them directly. Otherwise delegate reading to a subagent and keep only a ~25-line summary in main context.
+2. `vault_checkpoint(project=<project>)` if you need where the last session left off
+3. Pick the notes that actually bear on the task and read them per the tiers above — Tier 1 for anything under ~8 KB, Tier 2 for the big ones. Whole projects are readable at these sizes: only `rtlgen` (~224k tok) and `kahin-v1-internal` (~100k tok) need Tier 3; the other five are ≤39k tok in total.
 
 ## Write Policy (classify BEFORE writing)
 The class of a note decides who authorizes it:

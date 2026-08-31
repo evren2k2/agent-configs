@@ -21,14 +21,14 @@ My Obsidian vault is Claude's persistent memory. When Claude learns something, m
 
 ## Context Loading (Native MCP Tools)
 
-The SessionStart hook provides the project name. Use vault MCP tools (`vault_*`) to load context without bloating main context.
+The SessionStart hook provides the project name. Use vault MCP tools (`vault_*`) to find what matters before reading anything.
 
 **Session start workflow:**
 1. Map repo name to vault-safe equivalent (lowercase, underscores/spaces → hyphens).
 2. `vault_project(name=<project>)` → enumerate notes with status/type.
-3. Spawn Explore subagent to read 2-3 key notes; subagent returns ~25-line summary only — never ingest full notes directly.
+3. Read the notes that actually bear on the task **yourself** — the median note is ~1.7k tokens. For notes over ~8 KB, use `vault_semantic_search` and read the returned line range. Delegate to a subagent only for breadth, and require verbatim quotes back, never a paraphrase of numbers, paths or error strings.
 
-See `rules/obsidian-notes.md` for the tool decision tree.
+See `rules/obsidian-notes.md` for the three tiers and the tool decision tree.
 
 ## Note Quality Gate
 
