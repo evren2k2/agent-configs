@@ -171,6 +171,32 @@ class VaultMCPServer:
                         },
                         "required": ["query"]
                     }
+                },
+                {
+                    "name": "vault_checkpoint",
+                    "description": ("Read a project's most recent working-context "
+                                    "checkpoint(s) VERBATIM — the agent's own dump of "
+                                    "goal, plan, progress, decisions, active files and "
+                                    "blockers from a previous session. Use this to "
+                                    "recover context after a compaction or across "
+                                    "sessions; it returns just the checkpoint entries, "
+                                    "not the whole working-context.md, so there is no "
+                                    "reason to Read that file or to delegate the read "
+                                    "to a subagent. Omit `project` for the unscoped "
+                                    "agent/working-context.md. Pass headers=true for a "
+                                    "one-line-per-checkpoint index."),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project": {"type": "string",
+                                        "description": ("Vault project name, e.g. 'rtlgen'. "
+                                                        "Omit for agent/working-context.md.")},
+                            "n": {"type": "integer", "default": 1,
+                                  "description": "How many checkpoints, newest last. 0 = all."},
+                            "headers": {"type": "boolean", "default": False,
+                                        "description": "Return only checkpoint headers, one per line."}
+                        }
+                    }
                 }
             ]
         }
@@ -178,7 +204,12 @@ class VaultMCPServer:
     def on_call_tool(self, params):
         name = params.get("name")
         arguments = params.get("arguments", {})
-        
+
+        # Checkpoint reads open one known file — no index needed, so answer before
+        # paying for a load/refresh (which on a cold server also builds the index).
+        if name == "vault_checkpoint":
+            return self.tool_checkpoint(arguments)
+
         # Ensure index is ready before any tool execution
         idx = self.ensure_index()
 
@@ -254,6 +285,35 @@ class VaultMCPServer:
                 self.to_only = False
         return self._call_capturing(vault.cmd_links, MockArgs(note), idx,
                                     f"Not found: {note}")
+
+    def tool_checkpoint(self, args):
+        """Scoped verbatim read of working-context checkpoints. Parsing lives in
+        bin/checkpoint.py — the single ---CHECKPOINT--- implementation."""
+        import checkpoint as cp
+
+        project = args.get("project") or None
+        n = args.get("n", 1)
+        ctx = cp.context_path(self.vault_path, project)
+        label = project or "agent"
+
+        if not ctx.exists():
+            return {"content": [{"type": "text",
+                                 "text": f"No working context for '{label}' ({ctx})."}]}
+
+        _, entries = cp.split_document(ctx.read_text(encoding="utf-8"))
+        if not entries:
+            return {"content": [{"type": "text",
+                                 "text": f"'{label}' has a working context but no checkpoints yet."}]}
+
+        if args.get("headers"):
+            body = "\n".join(cp.entry_header(e) for e in entries)
+            return {"content": [{"type": "text",
+                                 "text": f"{len(entries)} checkpoint(s) in {ctx}:\n{body}"}]}
+
+        picked = entries[-n:] if n and n > 0 else entries
+        header = (f"{ctx} — {len(picked)} of {len(entries)} checkpoint(s), newest last")
+        return {"content": [{"type": "text",
+                             "text": header + "\n\n" + f"\n\n{cp.SEP}\n\n".join(picked)}]}
 
     def _ensure_semantic(self, idx):
         """Load the embedding model + vector store once per process. Returns

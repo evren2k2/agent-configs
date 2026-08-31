@@ -27,21 +27,14 @@ else
     done
 fi
 
-# --- List checkpoint headers (one line each) ---
-CHECKPOINT_LINES=""
-for CTX in "$VAULT"/projects/*/working-context.md; do
-    [ -f "$CTX" ] || continue
-    PROJ=$(basename "$(dirname "$CTX")")
-    while IFS= read -r line; do
-        # Strip "## Checkpoint" prefix and any following dashes/spaces
-        CLEAN=$(echo "$line" | sed 's/^## Checkpoint[ ]*[-—]*[ ]*//')
-        CHECKPOINT_LINES+="  $PROJ: $CLEAN"$'\n'
-    done < <(grep "^## Checkpoint" "$CTX" 2>/dev/null)
-done
+# Checkpoint headers are deliberately NOT listed here. The scan that used to build
+# CHECKPOINT_LINES was dead code — computed on every session start, never emitted.
+# To surface them, print `checkpoint.py list` output; to read one, the agent calls
+# vault_checkpoint(project=...) on demand, which costs nothing until it is needed.
 
 # --- Output (~4 lines) ---
 echo "Vault: ~/obsidian_notes/"
-echo "Vault MCP tools (pre-approved, no prompts): vault_project | vault_semantic_search | vault_find | vault_show | vault_links"
+echo "Vault MCP tools (pre-approved, no prompts): vault_project | vault_semantic_search | vault_find | vault_show | vault_links | vault_checkpoint"
 if [ -n "$MATCHED_PROJECT" ]; then
     echo "CWD project: $MATCHED_PROJECT"
     echo "Action: Call vault_project(name=\"$MATCHED_PROJECT\") to map this project's notes."

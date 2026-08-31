@@ -5,7 +5,7 @@ description: Use when context is getting heavy, at natural breakpoints between s
 
 # Checkpoint
 
-Dump your current working context to a project-specific file in the vault so it survives compaction or session boundaries. Keeps last 5 checkpoints.
+Dump your current working context to a project-specific file in the vault so it survives compaction or session boundaries. Keeps the last 5.
 
 ## When to Use
 
@@ -14,22 +14,13 @@ Dump your current working context to a project-specific file in the vault so it 
 - You're about to pivot to a different task
 - Before the user runs `/compact`
 
-## Where to Write
+## Writing — one call, not four
 
-**Per-project:** `~/obsidian_notes/projects/<project>/working-context.md`
+Pipe the entry body to `checkpoint.py write`. It appends, trims to the last 5, and
+snapshots the entry to `timeline.md` in a single process:
 
-Determine the project from your CWD or the task at hand. Match against existing vault project folders:
-- Working in `~/ECE_8893_FPGA/` → `projects/ece8893-fpga/working-context.md`
-- Working in `~/teknofest_chip_design/` → create `projects/teknofest/working-context.md`
-
-**Fallback:** If no project matches, use `~/obsidian_notes/agent/working-context.md`
-
-## Format
-
-Each checkpoint is separated by a `---CHECKPOINT---` marker. Append a new entry, then trim to keep only the last 5.
-
-```markdown
----CHECKPOINT---
+```bash
+cat <<'EOF' | python3 ~/.agent-configs/bin/checkpoint.py write --project <project>
 ## Checkpoint — YYYY-MM-DD HH:MM
 
 **CWD:** /path/to/working/directory
@@ -52,15 +43,56 @@ Files you're reading, editing, or monitoring. List paths.
 
 ### Open / Blocked
 Anything unresolved, waiting on the user, or stuck. "None" if clear.
+EOF
 ```
+
+**Do not** read the file first, append with Edit, then re-read and rewrite to trim.
+That is four full-context round trips for work that needs no model decision between
+the steps: the body is already written, "keep the last 5" is a fixed rule, and the
+timeline digest is derived from the body. The file work costs microseconds either
+way — the turns are the entire cost. One call.
+
+Omit `--project` to write the unscoped `agent/working-context.md`. `--keep N`
+changes the retention count; `--no-timeline` skips the timeline snapshot.
+
+## Reading — use the MCP tool
+
+`vault_checkpoint(project="<project>")` returns the latest checkpoint **verbatim**.
+
+- `n=3` for the last three, `n=0` for all
+- `headers=true` for a one-line-per-checkpoint index
+- omit `project` for `agent/working-context.md`
+
+Do **not** `Read` the whole `working-context.md` for this, and do **not** delegate
+the read to a subagent. The tool already returns only the entries, and a subagent
+summary would paraphrase away the file paths, flag names and error strings that are
+the reason to keep a checkpoint at all.
+
+## Where It Goes
+
+**Per-project:** `~/obsidian_notes/projects/<project>/working-context.md`
+
+Determine the project from your CWD or the task at hand. Match against existing
+vault project folders — `~/ECE_8893_FPGA/` → `--project ece8893-fpga`. A project
+folder and conformant frontmatter are created if absent.
+
+**Fallback:** no project match → omit `--project` (writes `agent/working-context.md`).
 
 ## Rules
 
-- **Append + trim to 5.** Don't overwrite the file — append a new `---CHECKPOINT---` entry, then trim older entries so only the last 5 remain.
+- **One call.** See above.
 - **Be concrete.** File paths, function names, error messages — not summaries.
 - **Include the user's words.** Quote the original request so post-compact you doesn't reinterpret it.
 - **30 seconds, not 5 minutes.** This is a quick dump, not a polished document.
+- **The preamble is yours.** Prose above the first `---CHECKPOINT---` (mission, current
+  goal, status) is hand-maintained and never touched by trimming. Edit it directly
+  when the project's direction changes — that is a direction-class write, so it needs
+  user approval per the vault write policy.
 
-## Trimming
+## How the pieces fit
 
-After appending, read the file back, split on `---CHECKPOINT---`, keep the last 5 entries, and rewrite the file.
+`bin/checkpoint.py` owns the `---CHECKPOINT---` format — parsing, trimming, and the
+2-line timeline digest — and is the only implementation of it. `hooks/update-timeline.sh`
+calls it so checkpoints still written with the Write/Edit tools also reach the
+timeline; `vault_checkpoint` calls it to read. `working-context.md` is a circular
+buffer of 5; `timeline.md` is append-only and keeps every checkpoint ever written.

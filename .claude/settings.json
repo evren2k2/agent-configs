@@ -7,7 +7,9 @@
       "mcp__vault-mcp__vault_project",
       "mcp__vault-mcp__vault_show",
       "mcp__vault-mcp__vault_links",
-      "mcp__vault-mcp__vault_semantic_search"
+      "mcp__vault-mcp__vault_semantic_search",
+      "mcp__vault-mcp__vault_checkpoint",
+      "Bash(python3 ~/.agent-configs/bin/checkpoint.py:*)"
     ],
     "defaultMode": "auto",
     "additionalDirectories": [

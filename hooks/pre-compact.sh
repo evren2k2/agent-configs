@@ -94,22 +94,16 @@ fi
 echo "Compacted. Snapshot saved to vault." >&2
 echo "" >&2
 
-# List checkpoint headers
-FOUND_ANY=""
-for CTX in "$VAULT"/projects/*/working-context.md; do
-    [ -f "$CTX" ] || continue
-    PROJ=$(basename "$(dirname "$CTX")")
-    while IFS= read -r line; do
-        CLEAN=$(echo "$line" | sed 's/^## Checkpoint[ ]*[-—]*[ ]*//')
-        echo "  $PROJ: $CLEAN" >&2
-        FOUND_ANY="yes"
-    done < <(grep "^## Checkpoint" "$CTX" 2>/dev/null)
-done
+# List checkpoint headers. bin/checkpoint.py owns the ---CHECKPOINT--- format;
+# this used to re-implement the scan with grep + sed.
+CP_LIST=$(python3 "$HOME/.agent-configs/bin/checkpoint.py" list 2>/dev/null)
 
-if [ -n "$FOUND_ANY" ]; then
+if [ -n "$CP_LIST" ]; then
+    echo "$CP_LIST" >&2
     echo "" >&2
-    echo "Recovery: spawn a subagent to read the matching checkpoint from vault." >&2
-    echo "Subagent reads full checkpoint, returns ~20-line summary to main context." >&2
+    echo "Recovery: call vault_checkpoint(project=\"<name>\") to read the matching checkpoint verbatim." >&2
+    echo "It returns the entries only — do not Read working-context.md whole, and do not" >&2
+    echo "delegate the read to a subagent (a summary paraphrases away the paths and errors)." >&2
 else
     echo "No checkpoints found. Recover from git log + file reads." >&2
 fi
