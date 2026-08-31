@@ -3,14 +3,21 @@
 
 NON-DESTRUCTIVE (graphify-style): never overwrites a user's existing global config.
 Per-artifact strategy:
-  - shared config FILES (CLAUDE.md)            -> MERGE a marked block, keep the rest
+  - shared config FILES (.claude/instructions.md -> ~/.claude/CLAUDE.md)
+                                               -> MERGE a marked block, keep the rest
   - shared config JSON  (settings.json)        -> DEEP-MERGE our keys (never delete theirs), .orig backup
   - collection DIRS (skills, rules)            -> per-ITEM symlink (drop ours in, keep the user's)
   - our namespace (~/.agent-configs, agy plugins) -> symlink
   - MCP servers -> `claude mcp add/remove --scope user` + agy config merge (already additive)
 
-Merged files are COPIES, so re-run `agentcfg update` after editing repo CLAUDE.md/settings.json.
+Merged files are COPIES, so re-run `agentcfg update` after editing repo
+.claude/instructions.md or .claude/settings.json.
 Per-item dir symlinks stay LIVE (edit the repo -> active everywhere, no re-sync).
+
+The global-instructions source is named instructions.md, NOT CLAUDE.md, on purpose:
+a file at <repo>/.claude/CLAUDE.md is auto-injected by Claude Code as PROJECT memory
+while its installed copy at ~/.claude/CLAUDE.md is injected as USER memory, so the
+same ~1k tokens landed in context twice whenever the CWD was this repo.
 
   agentcfg status                 read-only: what's installed / drifted
   agentcfg install   [--apply]    dry-run unless --apply
@@ -41,7 +48,7 @@ REQUIREMENTS = REPO / "requirements.txt"
 VAULT = HOME / "obsidian_notes"
 
 AGENTS = ["claude"]
-MD_FILES = [(REPO / ".claude/CLAUDE.md", HOME / ".claude/CLAUDE.md")]
+MD_FILES = [(REPO / ".claude/instructions.md", HOME / ".claude/CLAUDE.md")]
 JSON_FILES = [(REPO / ".claude/settings.json", HOME / ".claude/settings.json")]
 ITEM_DIRS = [(REPO / f".{a}/{d}", HOME / f".{a}/{d}") for a in AGENTS for d in ("rules", "skills")]
 

@@ -19,7 +19,7 @@ REMINDER=""
 
 # Map: instruction stack files -> vault notes that document them
 case "$FILE_PATH" in
-    */.claude/CLAUDE.md|*/.claude/rules/obsidian-notes.md)
+    */.claude/instructions.md|*/.claude/rules/obsidian-notes.md)
         REMINDER="You just modified an instruction stack file. Update your vault's system architecture notes if the change affects the documented architecture."
         ;;
     */skills/obsidian-notes/SKILL.md)

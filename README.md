@@ -50,11 +50,11 @@ Clone this repository into your home directory (or any preferred location), then
 python3 bin/agentcfg install --apply     # omit --apply for a dry-run preview
 ```
 
-It is **non-destructive**: it merges a marked block into an existing `CLAUDE.md` and deep-merges keys into `settings.json` (never overwriting your own config), and drops per-skill symlinks (copies on locked-down Windows) into your config dirs. Manage it anytime:
+It is **non-destructive**: it merges a marked block from `.claude/instructions.md` into an existing `~/.claude/CLAUDE.md` and deep-merges keys into `settings.json` (never overwriting your own config), and drops per-skill symlinks (copies on locked-down Windows) into your config dirs. Manage it anytime:
 
 ```bash
 agentcfg status               # what's installed / drifted
-agentcfg update --apply       # re-sync after editing repo CLAUDE.md / settings.json
+agentcfg update --apply       # re-sync after editing repo .claude/instructions.md / settings.json
 agentcfg uninstall --apply    # cleanly remove everything (restores backups)
 ```
 
