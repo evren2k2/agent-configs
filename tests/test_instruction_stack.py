@@ -295,6 +295,101 @@ class CheckpointDiscoveryTests(unittest.TestCase):
                               f"never show the id that makes that true")
 
 
+class SkillMirrorTests(unittest.TestCase):
+    """Fix 3, generalized — a skill installed for Claude and for agy is one skill.
+    Nothing but a test notices when a change lands on one side only.
+
+    VERBATIM_MIRRORS are the pairs that must stay byte-identical. HOST_ADAPTED are
+    the pairs that legitimately differ, and only because agy names its host tools
+    differently (`Bash` -> `run_shell_command`, `Read` -> `read_file`, `Grep` ->
+    `grep`) or points at a skill where Claude points at a file path. Those are
+    checked for equal shape instead, so a real edit to one side still shows up."""
+
+    CLAUDE_SKILLS = REPO / ".claude/skills"
+    PLUGINS = REPO / ".antigravity/plugins"
+
+    VERBATIM_MIRRORS = {
+        "architect-interview": "general",
+        "compose-docs": "general",
+        "paper-outline": "general",
+        "isscc-figure": "general",
+        "checkpoint": "obsidian",
+        "project-archaeology": "obsidian",
+    }
+    HOST_ADAPTED = {
+        "santa-method": "general",
+        "obsidian-audit": "obsidian",
+        "obsidian-notes": "obsidian",
+    }
+    # Claude-only: graphify ships with its own references/ tree and has no agy plugin.
+    CLAUDE_ONLY = {"graphify"}
+
+    def _pair(self, skill, plugin):
+        return (self.CLAUDE_SKILLS / skill / "SKILL.md",
+                self.PLUGINS / plugin / "skills" / skill / "SKILL.md")
+
+    def test_every_claude_skill_is_accounted_for(self):
+        """A new skill added to one stack only is the failure this catches."""
+        known = set(self.VERBATIM_MIRRORS) | set(self.HOST_ADAPTED) | self.CLAUDE_ONLY
+        on_disk = {d.name for d in self.CLAUDE_SKILLS.iterdir() if (d / "SKILL.md").is_file()}
+        self.assertEqual(on_disk - known, set(),
+                         "skill(s) exist for Claude but are not classified here — "
+                         "mirror them into an agy plugin, or add to CLAUDE_ONLY")
+        self.assertEqual(known - on_disk - self.CLAUDE_ONLY, set(),
+                         "classified skill(s) no longer exist under .claude/skills")
+
+    def test_verbatim_mirrors_are_byte_identical(self):
+        for skill, plugin in self.VERBATIM_MIRRORS.items():
+            claude, agy = self._pair(skill, plugin)
+            with self.subTest(skill=skill):
+                self.assertTrue(agy.is_file(), f"{skill} is not installed for agy ({agy})")
+                self.assertEqual(claude.read_text(encoding="utf-8"),
+                                 agy.read_text(encoding="utf-8"),
+                                 f"the agy copy of {skill} has drifted from the Claude one")
+
+    def test_host_adapted_mirrors_keep_the_same_shape(self):
+        """These differ only in host tool names, so their headings must still match."""
+        for skill, plugin in self.HOST_ADAPTED.items():
+            claude, agy = self._pair(skill, plugin)
+            with self.subTest(skill=skill):
+                heads = [tuple(l for l in p.read_text(encoding="utf-8").splitlines()
+                               if l.startswith("#")) for p in (claude, agy)]
+                self.assertEqual(heads[0], heads[1],
+                                 f"{skill} headings diverged — that is content drift, "
+                                 f"not a host-tool rename")
+
+    def test_every_skill_declares_name_and_description(self):
+        """Both hosts route on the frontmatter description; without it a skill is
+        installed but never surfaced — the same class of bug as an unfindable tool."""
+        for path in sorted(self.CLAUDE_SKILLS.glob("*/SKILL.md")) + \
+                sorted(self.PLUGINS.glob("*/skills/*/SKILL.md")):
+            with self.subTest(skill=str(path.relative_to(REPO))):
+                lines = path.read_text(encoding="utf-8").splitlines()
+                self.assertEqual(lines[0], "---", "SKILL.md must open with frontmatter")
+                end = lines.index("---", 1)
+                fm = "\n".join(lines[1:end])
+                self.assertRegex(fm, r"(?m)^name: \S+")
+                self.assertRegex(fm, r"(?m)^description: \S+")
+
+    def test_skill_dir_names_are_lowercase_hyphenated(self):
+        for path in sorted(self.CLAUDE_SKILLS.glob("*/SKILL.md")) + \
+                sorted(self.PLUGINS.glob("*/skills/*/SKILL.md")):
+            name = path.parent.name
+            with self.subTest(skill=name):
+                self.assertRegex(name, r"^[a-z0-9]+(-[a-z0-9]+)*$")
+
+    def test_skill_dir_matches_its_declared_name(self):
+        """agentcfg symlinks by DIRECTORY name; the host routes on the frontmatter
+        `name`. If they disagree the skill is invoked under a name that is not the
+        one installed."""
+        for path in sorted(self.CLAUDE_SKILLS.glob("*/SKILL.md")) + \
+                sorted(self.PLUGINS.glob("*/skills/*/SKILL.md")):
+            declared = re.search(r"(?m)^name:\s*(\S+)", path.read_text(encoding="utf-8"))
+            with self.subTest(skill=path.parent.name):
+                self.assertIsNotNone(declared)
+                self.assertEqual(declared.group(1), path.parent.name)
+
+
 class SingleParserTests(unittest.TestCase):
     """Fix 3 — the ---CHECKPOINT--- format must have exactly one implementation."""
 
