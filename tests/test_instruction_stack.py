@@ -14,6 +14,10 @@ have no other safety net:
      ~25-line subagent summary, and it contradicted itself two paragraphs later.
   3. Claude and agy must not drift. The agy mirrors are copies; nothing but a test
      notices when one side is updated and the other is not.
+  4. A tool that exists is not a tool an agent can find. Every mention of
+     vault_checkpoint used the bare short name while the callable id is prefixed
+     with the server, so in a host that defers MCP schemas the lookup returned
+     nothing and the agent fell back to a Read of working-context.md.
 
 Run from repo root:
     py -3 -m unittest tests.test_instruction_stack -v
@@ -37,6 +41,12 @@ AGY = REPO / ".antigravity/plugins/obsidian"
 AGY_RULES = AGY / "skills/obsidian-vault-rules/SKILL.md"
 AGY_CHECKPOINT = AGY / "skills/checkpoint/SKILL.md"
 AGY_MCP = AGY / "mcp_config.json"
+
+SESSION_START = REPO / "hooks/session-start.sh"
+
+# The id an agent must actually call. The short name `vault_checkpoint` is prose;
+# a host that defers MCP schemas lists only this string.
+QUALIFIED_ID = "mcp__vault-mcp__vault_checkpoint"
 
 # Phrasings the three-tier policy replaced. Any reappearance is a regression:
 # each one tells the agent to hand a fidelity read to a summarizer.
@@ -203,6 +213,86 @@ class CheckpointWiringTests(unittest.TestCase):
                           f"{path.relative_to(REPO)} does not mention vault_checkpoint")
             self.assertIn("Six native MCP tools", text,
                           f"{path.relative_to(REPO)} still says five tools")
+
+
+class CheckpointDiscoveryTests(unittest.TestCase):
+    """The reported failure: the server exposed vault_checkpoint, the permission
+    allowed it, both stacks named it — and an agent still could not call it,
+    because every mention used the bare short name while the callable id is
+    prefixed with the server (`mcp__vault-mcp__`). A host that defers MCP schemas
+    advertises only the prefixed form, so looking up the short name finds nothing
+    and the agent degrades to a Read of working-context.md — exactly what the
+    skill forbids without naming an alternative.
+
+    CheckpointWiringTests asserts the tool EXISTS. These assert an agent can FIND
+    it, and has somewhere to go when it cannot."""
+
+    STACKS = {"claude": CLAUDE_CHECKPOINT, "agy": AGY_CHECKPOINT}
+    RULES = {"claude": CLAUDE_RULES, "agy": AGY_RULES}
+
+    def test_checkpoint_skills_give_the_qualified_tool_id(self):
+        for stack, path in self.STACKS.items():
+            self.assertIn(QUALIFIED_ID, path.read_text(encoding="utf-8"),
+                          f"{stack} checkpoint skill names only the short "
+                          f"`vault_checkpoint`, which resolves to nothing in a "
+                          f"host that defers MCP schemas")
+
+    def test_rules_explain_that_short_names_are_shorthand(self):
+        """The rules table lists six short names. Without this note an agent reads
+        that table as a list of callable ids."""
+        for stack, path in self.RULES.items():
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("mcp__vault-mcp__", text,
+                          f"{stack} rules never show the prefixed form")
+            self.assertRegex(text, r"(?i)unfetched, not missing",
+                             f"{stack} rules do not tell the agent an unresolved "
+                             f"short name means the schema is unfetched")
+
+    def test_both_stacks_name_the_bash_fallback(self):
+        """`Read` and a subagent are both forbidden for this read. Something has to
+        be permitted when the tool is unavailable, or the agent picks a forbidden
+        path anyway."""
+        for group in (self.STACKS, self.RULES):
+            for stack, path in group.items():
+                text = path.read_text(encoding="utf-8")
+                self.assertIn("checkpoint.py read", text,
+                              f"{path.relative_to(REPO)} forbids Read/subagent for "
+                              f"checkpoints without naming the Bash fallback")
+
+    def test_the_documented_fallback_is_pre_approved(self):
+        """A fallback that triggers a permission prompt is not a fallback."""
+        allow = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))["permissions"]["allow"]
+        prefixes = [r[len("Bash("):-len(":*)")] for r in allow
+                    if r.startswith("Bash(") and r.endswith(":*)")]
+        cmd = "python3 ~/.agent-configs/bin/checkpoint.py read --project demo"
+        self.assertTrue(any(cmd.startswith(p) for p in prefixes),
+                        f"no allow-rule prefix in {prefixes} covers {cmd!r}")
+
+    def test_session_start_advertises_the_prefixed_form(self):
+        """First thing in context every session — the one place a name is certain
+        to be seen before the agent needs it."""
+        hook = SESSION_START.read_text(encoding="utf-8")
+        self.assertIn("mcp__vault-mcp__", hook)
+        self.assertIn("checkpoint.py read", hook,
+                      "the hook offers no fallback next to the tool it advertises")
+
+    def test_session_start_mentions_checkpoints_only_when_one_exists(self):
+        """The hook runs on every session start; an unconditional extra line would
+        be a permanent token cost for projects that have never checkpointed."""
+        hook = SESSION_START.read_text(encoding="utf-8")
+        self.assertRegex(
+            hook,
+            r'if \[ -f "\$VAULT/projects/\$MATCHED_PROJECT/working-context\.md" \]',
+            "the checkpoint hint is not gated on the file existing")
+
+    def test_no_stack_still_claims_the_tools_need_no_lookup(self):
+        """'always active' next to a bare short name is the premise that failed."""
+        for stack, path in self.RULES.items():
+            text = path.read_text(encoding="utf-8")
+            if "always active" in text:
+                self.assertIn("mcp__vault-mcp__", text,
+                              f"{stack} rules say the tools are 'always active' but "
+                              f"never show the id that makes that true")
 
 
 class SingleParserTests(unittest.TestCase):

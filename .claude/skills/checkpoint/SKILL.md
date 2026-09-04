@@ -55,18 +55,34 @@ way — the turns are the entire cost. One call.
 Omit `--project` to write the unscoped `agent/working-context.md`. `--keep N`
 changes the retention count; `--no-timeline` skips the timeline snapshot.
 
-## Reading — use the MCP tool
+## Reading — `vault_checkpoint`, and what to do when you can't see it
 
-`vault_checkpoint(project="<project>")` returns the latest checkpoint **verbatim**.
+The callable id is **`mcp__vault-mcp__vault_checkpoint`**. `vault_checkpoint` is the
+short name this doc uses; it is not the string your tool list holds. A host that defers
+MCP schemas advertises only the prefixed name, so a search for the short one comes back
+empty — that is the tool being unfetched, not absent. Fetch its schema
+(`ToolSearch("select:mcp__vault-mcp__vault_checkpoint")`), then call it.
+
+    mcp__vault-mcp__vault_checkpoint(project="<project>")  →  latest checkpoint, verbatim
 
 - `n=3` for the last three, `n=0` for all
 - `headers=true` for a one-line-per-checkpoint index
 - omit `project` for `agent/working-context.md`
 
-Do **not** `Read` the whole `working-context.md` for this, and do **not** delegate
-the read to a subagent. The tool already returns only the entries, and a subagent
-summary would paraphrase away the file paths, flag names and error strings that are
-the reason to keep a checkpoint at all.
+**If the tool is genuinely unavailable here, fall back to Bash — never to `Read`.**
+Same parser, same output, pre-approved, no MCP required:
+
+```bash
+python3 ~/.agent-configs/bin/checkpoint.py read --project <project> -n 1
+```
+
+`-n` mirrors the tool's `n`. `--headers` mirrors `headers=true` but applies `-n` first,
+so pass `-n 0 --headers` to get the tool's whole-file index rather than one line.
+
+The two things to avoid are `Read`-ing the whole `working-context.md` — it carries a
+hand-maintained preamble and up to 5 entries you did not ask for — and delegating the
+read to a subagent, whose summary paraphrases away the file paths, flag names and
+error strings that are the reason to keep a checkpoint at all.
 
 ## Where It Goes
 

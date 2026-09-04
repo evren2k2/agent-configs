@@ -32,12 +32,17 @@ fi
 # To surface them, print `checkpoint.py list` output; to read one, the agent calls
 # vault_checkpoint(project=...) on demand, which costs nothing until it is needed.
 
-# --- Output (~4 lines) ---
+# --- Output (4-6 lines) ---
 echo "Vault: ~/obsidian_notes/"
-echo "Vault MCP tools (pre-approved, no prompts): vault_project | vault_semantic_search | vault_find | vault_show | vault_links | vault_checkpoint"
+echo "Vault MCP tools (pre-approved, callable as mcp__vault-mcp__<name>): vault_project | vault_semantic_search | vault_find | vault_show | vault_links | vault_checkpoint"
+echo "  A short name that does not resolve means the schema is unfetched, not that the tool is missing — fetch it, do not fall back to Read/Grep."
 if [ -n "$MATCHED_PROJECT" ]; then
     echo "CWD project: $MATCHED_PROJECT"
     echo "Action: Call vault_project(name=\"$MATCHED_PROJECT\") to map this project's notes."
+    if [ -f "$VAULT/projects/$MATCHED_PROJECT/working-context.md" ]; then
+        echo "Last session: mcp__vault-mcp__vault_checkpoint(project=\"$MATCHED_PROJECT\") reads the last checkpoint verbatim"
+        echo "              (fallback: python3 ~/.agent-configs/bin/checkpoint.py read --project $MATCHED_PROJECT)."
+    fi
 else
     echo "Action: Use vault_find or vault_project to locate project context."
 fi

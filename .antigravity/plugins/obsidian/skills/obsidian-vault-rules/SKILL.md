@@ -20,6 +20,8 @@ At session start the hook provides the project name. Use `vault_project` to enum
 
 Six native MCP tools are registered and pre-approved. You MUST use one before `read_file`-ing any vault note.
 
+**Their callable ids carry the server prefix — `mcp__vault-mcp__vault_find`, `mcp__vault-mcp__vault_checkpoint`, and so on.** The bare `vault_*` names in this file are shorthand for reading; a host that defers MCP schemas advertises only the prefixed form, so a search for the short name comes back empty. That means unfetched, not missing — fetch the schema (`ToolSearch("select:mcp__vault-mcp__<tool>")`) before concluding a tool is unavailable, and never silently degrade to `read_file`/`grep` because a short name did not resolve.
+
 | Goal | Tool | Key arg |
 |------|------|---------|
 | Find a note by keyword / name (BM25 lexical) | `vault_find` | `query` |
@@ -36,7 +38,7 @@ Six native MCP tools are registered and pre-approved. You MUST use one before `r
 - "I want to see a note's connections" → `vault_links`
 - "I need note body content" → identify it with a vault tool first, then `read_file`
 - "The note is large and I need one part of it" → `vault_semantic_search`, then read the returned line range — this is Tier 2, and it beats both a whole-file read and a subagent summary
-- "What was I doing here last session?" → `vault_checkpoint(project=…)`, not a `read_file` of `working-context.md`
+- "What was I doing here last session?" → `vault_checkpoint(project=…)`, not a `read_file` of `working-context.md`; if the tool is genuinely unavailable, `python3 ~/.agent-configs/bin/checkpoint.py read --project <p>` gives the identical output over Bash
 - "I need full-text search inside note bodies" → `grep` (last resort only)
 
 **Note key format:** lowercase-hyphenated stems. When a stem is ambiguous across projects, qualify it: `test-project/working-context`.
