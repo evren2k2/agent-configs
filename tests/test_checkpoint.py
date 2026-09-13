@@ -273,5 +273,68 @@ class TimelineDigestTests(unittest.TestCase):
         self.assertIn("DECISION: keep 5, not 10", line2)
 
 
+class IntentCarryTests(unittest.TestCase):
+    """The ledger must survive the 5-entry buffer; that is its whole purpose."""
+
+    def test_absent_ledger_is_inserted_before_the_first_section(self):
+        prior = ('## Checkpoint — 2026-01-01 00:00\n\n'
+                 '### User Intent\n1. "make it fast"\n\n### Current Goal\nspeed\n')
+        body = '## Checkpoint — 2026-01-02 00:00\n\n### Current Goal\nstill speed\n'
+        out = cp.carry_intent(body, [prior])
+        self.assertIn('### User Intent', out)
+        self.assertIn('1. "make it fast"', out)
+        self.assertLess(out.index("### User Intent"), out.index("### Current Goal"))
+
+    def test_new_items_are_appended_below_the_carried_ones(self):
+        prior = '## C\n\n### User Intent\n1. "make it fast"\n\n### Current Goal\nx\n'
+        body = '## C\n\n### User Intent\n2. "and correct"\n\n### Current Goal\ny\n'
+        out = cp.carry_intent(body, [prior])
+        self.assertLess(out.index('"make it fast"'), out.index('"and correct"'))
+
+    def test_carry_is_idempotent(self):
+        prior = '## C\n\n### User Intent\n1. "a"\n\n### Current Goal\nx\n'
+        once = cp.carry_intent('## C\n\n### Current Goal\ny\n', [prior])
+        twice = cp.carry_intent(once, [prior])
+        self.assertEqual(once.count('1. "a"'), twice.count('1. "a"'))
+
+    def test_ledger_reaches_back_past_entries_that_lack_one(self):
+        old = '## C\n\n### User Intent\n1. "a"\n\n### Current Goal\nx\n'
+        mid = '## C\n\n### Current Goal\nno ledger here\n'
+        out = cp.carry_intent('## C\n\n### Current Goal\nz\n', [old, mid])
+        self.assertIn('1. "a"', out)
+
+    def test_no_prior_ledger_leaves_the_body_untouched(self):
+        body = '## C\n\n### Current Goal\nx\n'
+        self.assertEqual(cp.carry_intent(body, ['## C\n\n### Progress\nnone\n']), body)
+
+    def test_ledger_survives_trimming_past_the_buffer(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        vault = Path(tmp.name)
+        (vault / "projects" / "demo").mkdir(parents=True)
+        cp.vault_root = lambda: vault
+
+        def write(body, keep=2):
+            class A:
+                project, no_timeline, no_carry = "demo", True, False
+            A.keep = keep
+            from io import StringIO
+            prev, sys.stdin = sys.stdin, StringIO(body)
+            out, sys.stdout = sys.stdout, StringIO()
+            try:
+                cp.cmd_write(A)
+            finally:
+                sys.stdin, sys.stdout = prev, out
+
+        write('### User Intent\n1. "the original ask"\n\n### Current Goal\nstart\n')
+        write('### Current Goal\nmiddle\n')
+        write('### Current Goal\nend\n')
+
+        text = (vault / "projects" / "demo" / "working-context.md").read_text()
+        _, entries = cp.split_document(text)
+        self.assertEqual(len(entries), 2)              # first entry was trimmed away
+        self.assertIn('1. "the original ask"', entries[-1])   # intent still present
+
+
 if __name__ == "__main__":
     unittest.main()

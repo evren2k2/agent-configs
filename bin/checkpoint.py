@@ -103,6 +103,59 @@ def entry_header(entry: str) -> str:
     return "(no header)"
 
 
+# ------------------------------------------------------------------ intent ledger
+# The `### User Intent` ledger is the verbatim record of everything the user has
+# specified. Progress can be re-derived from the repo; intent cannot be re-derived
+# from anything, so it is the one section that must never fall out of the 5-entry
+# buffer. Carrying it forward on every write makes the newest checkpoint
+# self-sufficient, which is what lets the buffer stay small.
+INTENT_HEADING = "### User Intent"
+_INTENT_RE = re.compile(r"(?im)^###\s+User\s+Intent\b[^\n]*\n")
+
+
+def intent_body(entry: str) -> str:
+    """The ledger items from `entry`, without the heading. '' when absent."""
+    m = _INTENT_RE.search(entry)
+    if not m:
+        return ""
+    rest = entry[m.end():]
+    nxt = re.search(r"(?m)^###\s", rest)
+    return (rest[:nxt.start()] if nxt else rest).strip()
+
+
+def carry_intent(body: str, entries: list[str]) -> str:
+    """Splice the most recent prior ledger into `body`.
+
+    Prior items always sort above the new ones, so the ledger stays chronological.
+    When `body` has no ledger section at all we insert one ahead of its first
+    `### ` heading — the ledger leads the entry by convention.
+    """
+    prior = ""
+    for e in reversed(entries):
+        prior = intent_body(e)
+        if prior:
+            break
+    if not prior:
+        return body
+
+    m = _INTENT_RE.search(body)
+    if m:
+        new_items = intent_body(body)
+        if prior in new_items:              # already carried by the caller
+            return body
+        merged = prior + ("\n" + new_items if new_items else "")
+        rest = body[m.end():]
+        nxt = re.search(r"(?m)^###\s", rest)
+        tail = rest[nxt.start():] if nxt else ""
+        return body[:m.end()] + merged + "\n\n" + tail
+
+    nxt = re.search(r"(?m)^###\s", body)
+    block = f"{INTENT_HEADING}\n{prior}\n\n"
+    if nxt:
+        return body[:nxt.start()] + block + body[nxt.start():]
+    return body.rstrip() + "\n\n" + block.rstrip() + "\n"
+
+
 # ------------------------------------------------------------------ timeline digest
 def timeline_lines(entry: str) -> tuple[str, str]:
     """Compress one entry to the 2-line timeline form.
@@ -262,6 +315,12 @@ def cmd_write(args) -> int:
         body = (f"## Checkpoint — {date.today().isoformat()} "
                 f"{time.strftime('%H:%M')}\n\n{body}")
 
+    if not getattr(args, "no_carry", False):
+        carried = carry_intent(body, entries)
+        if carried != body:
+            print("intent ledger carried forward from the previous checkpoint")
+            body = carried
+
     entries.append(body)
     dropped = max(0, len(entries) - args.keep)
     entries = entries[-args.keep:]
@@ -332,6 +391,9 @@ def main() -> int:
     w.add_argument("--project", help="vault project name; omit for agent/working-context.md")
     w.add_argument("--keep", type=int, default=DEFAULT_KEEP)
     w.add_argument("--no-timeline", action="store_true")
+    w.add_argument("--no-carry", action="store_true",
+                   help="do not carry the previous checkpoint's User Intent ledger "
+                        "forward (only when deliberately rewriting it in full)")
     w.set_defaults(fn=cmd_write)
 
     r = sub.add_parser("read", help="print the last N checkpoints verbatim")
