@@ -26,8 +26,13 @@ WHY A SCRIPT AND NOT A PROSE RULE
       * the CAP. Dispositions are always-on, so the budget is finite. Adding to a full
         queue fails and names what you must evict.
       * PROMOTION IS EARNED. A disposition leaves the queue only after it has been
-        re-triggered in a later session (`seen`), which is the evidence that its
+        re-triggered in a LATER session (`seen`), which is the evidence that its
         trigger actually recurs — the property the old entries provably lacked.
+        Re-proposing an already-queued rule counts as that re-trigger, which is what
+        closes the loop: the hook asks every session to propose what it was corrected
+        on, so a second session reaching the same rule promotes it without anyone
+        having to remember a separate command. A date guard keeps "again" meaning a
+        later session rather than a second mention in this one.
 
     Capture stays autonomous and cheap. Activation does not: `promote` prints the block
     and changes nothing until `--apply`, because a rule that shapes every future session
@@ -36,7 +41,7 @@ WHY A SCRIPT AND NOT A PROSE RULE
 USAGE
     instincts.py propose --disposition TEXT --origin TEXT [--project P]
     instincts.py list [--all]
-    instincts.py seen --match TEXT          # re-triggered this session; earns promotion
+    instincts.py seen --match TEXT [--origin TEXT]   # re-triggered; earns promotion
     instincts.py promote --match TEXT [--apply]
     instincts.py expire                     # drop stale never-re-triggered proposals
 """
@@ -68,7 +73,24 @@ RULES_FILE = BIN_DIR.parent / ".claude/rules/learned-dispositions.md"
 AGY_SKILL = (BIN_DIR.parent /
              ".antigravity/plugins/general/skills/learned-dispositions/SKILL.md")
 
-FIELDS = ("disposition", "origin", "date", "project", "seen")
+FIELDS = ("disposition", "origin", "date", "project", "seen", "last_seen")
+
+
+def bump(entry: dict, origin: str = "") -> bool:
+    """Count a re-trigger. True if it counted, False if already counted today.
+
+    The date guard is what keeps `seen` meaning "recurred in a LATER session" rather
+    than "was mentioned twice in one". It under-counts (two sessions on one day count
+    once), which is the safe direction for a gate that installs always-on behaviour.
+    """
+    today = datetime.date.today().isoformat()
+    if entry.get("last_seen") == today:
+        return False
+    entry["seen"] = entry.get("seen", 0) + 1
+    entry["last_seen"] = today
+    if origin:
+        entry.setdefault("recurrences", []).append(f"{today}: {origin}")
+    return True
 
 
 def queue_path() -> Path:
@@ -120,9 +142,24 @@ def cmd_propose(args) -> int:
 
     text = args.disposition.strip()
     for x in items:
-        if x["disposition"].strip().lower() == text.lower():
-            print(f"instincts: already queued — {x['disposition'][:70]}")
-            return 0
+        if x["disposition"].strip().lower() != text.lower():
+            continue
+        # A duplicate is not noise — it is the evidence promotion asks for. The hook
+        # tells every session to propose what it was corrected on; a LATER session
+        # independently arriving at the same rule is exactly "this recurs". Treating
+        # it as a no-op (the original behaviour) left `seen` pinned at 1 forever, so
+        # nothing could ever promote and the queue quietly expired instead.
+        if bump(x, args.origin.strip()):
+            save(items)
+            print(f"already queued — counted as a re-trigger (seen={x['seen']}): "
+                  f"{x['disposition'][:60]}")
+            if x["seen"] >= PROMOTE_AT:
+                print("READY to promote — `instincts.py promote --match ... --apply` "
+                      "(needs the user's approval)")
+        else:
+            print(f"already queued, already counted today (seen={x.get('seen', 1)}): "
+                  f"{x['disposition'][:60]}")
+        return 0
 
     if len(items) >= args.cap:
         weakest = sorted(items, key=lambda x: (x.get("seen", 0), x.get("date", "")))[:3]
@@ -135,12 +172,14 @@ def cmd_propose(args) -> int:
             f"(`instincts.py expire`, or promote a ready one). Weakest candidates:\n"
             f"{listing}")
 
+    today = datetime.date.today().isoformat()
     items.append({
         "disposition": text,
         "origin": args.origin.strip(),
-        "date": datetime.date.today().isoformat(),
+        "date": today,
         "project": args.project or "global",
         "seen": 1,
+        "last_seen": today,
     })
     save(items)
     print(f"queued ({len(items)}/{args.cap}): {text[:70]}")
@@ -167,9 +206,11 @@ def cmd_list(args) -> int:
 def cmd_seen(args) -> int:
     items = load()
     i = find(items, args.match)
-    items[i]["seen"] = items[i].get("seen", 0) + 1
-    save(items)
     x = items[i]
+    if not bump(x, args.origin.strip() if getattr(args, "origin", "") else ""):
+        print(f"already counted today (seen={x.get('seen', 1)}): {x['disposition'][:60]}")
+        return 0
+    save(items)
     print(f"seen={x['seen']}: {x['disposition'][:70]}")
     if x["seen"] >= PROMOTE_AT:
         print("READY to promote — `instincts.py promote --match ... --apply` "
@@ -219,8 +260,8 @@ def cmd_promote(args) -> int:
                  f"retired instincts never did. Use --force to override.")
 
     block = (f"- **{x['disposition']}**\n"
-             f"  <sub>learned {x.get('date', '?')} in {x.get('project', '?')}; "
-             f"{x.get('origin', '')}</sub>\n")
+             f"  <sub>seen {x.get('seen', 1)}x since {x.get('date', '?')} "
+             f"({x.get('project', '?')}); {x.get('origin', '')}</sub>\n")
 
     if not args.apply:
         print(f"would append to BOTH stacks:\n  {RULES_FILE}\n  {AGY_SKILL}\n")
@@ -275,6 +316,7 @@ def main() -> int:
 
     p = sub.add_parser("seen", help="mark re-triggered in this session")
     p.add_argument("--match", required=True)
+    p.add_argument("--origin", default="", help="what re-triggered it, verbatim")
     p.set_defaults(fn=cmd_seen)
 
     p = sub.add_parser("promote", help="move into the always-loaded rules file")

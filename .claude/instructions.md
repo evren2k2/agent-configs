@@ -74,6 +74,8 @@ The source of a disposition is a **user correction** — a moment your scope, yo
 The test: if the rule stops being true when you switch projects, it is knowledge. Write the note instead.
 
 Queued dispositions do nothing until promoted into `rules/learned-dispositions.md`, which every session loads. Promotion requires the disposition to have re-triggered in a later session *and* the user's approval — it is a direction-class write. Never edit that rules file by hand; use `instincts.py promote --apply`.
+
+Propose a disposition even when you suspect it is already queued: an identical rule proposed in a later session is counted as the re-trigger that earns promotion (a same-day repeat is not), so `propose` alone closes the loop.
 # graphify
 - **graphify** (`.claude/skills/graphify/SKILL.md`) - any input to knowledge graph. Trigger: `/graphify`
 When the user types `/graphify`, invoke the Skill tool with `skill: "graphify"` before doing anything else.

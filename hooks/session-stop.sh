@@ -42,5 +42,6 @@ KNOWLEDGE CHECK: did this session establish something durable about how a system
 
 DISPOSITION CHECK: did the user CORRECT you this session — your scope, your rigor, an assumption, an unmeasured claim? Do not ask what the task taught you; that returns knowledge. Ask where you were corrected. If there was such a moment, name the one-line rule that would have prevented it and queue it:
   python3 ~/.agent-configs/bin/instincts.py propose --disposition '<the rule>' --origin '<quote the user verbatim>' --project <p>
-A disposition is about HOW to work and must hold on any turn. The test: if the rule stops being true when you switch projects, it is knowledge — write the note instead. No correction this session means nothing to queue; that is the normal case."
+A disposition is about HOW to work and must hold on any turn. The test: if the rule stops being true when you switch projects, it is knowledge — write the note instead. No correction this session means nothing to queue; that is the normal case.
+Propose it even if you think it is already queued — an identical rule from a later session is counted as the re-trigger that earns promotion, which is the only way anything ever leaves the queue. \`instincts.py list\` shows what is pending."
 python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":sys.argv[1]}}))' "$MSG"

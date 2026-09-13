@@ -57,6 +57,12 @@ class QueueCase(unittest.TestCase):
         return I.cmd_propose(Args(disposition=text, origin=origin,
                                   project="demo", cap=cap))
 
+    def backdate(self, match, day="2020-01-01"):
+        """Pretend the last re-trigger happened in an earlier session."""
+        items = I.load()
+        items[I.find(items, match)]["last_seen"] = day
+        I.save(items)
+
     def quiet(self, fn, *a, **kw):
         from io import StringIO
         out, sys.stdout = sys.stdout, StringIO()
@@ -75,10 +81,43 @@ class ProposeTests(QueueCase):
             self.assertIn(field, items[0])
         self.assertEqual(items[0]["seen"], 1)
 
-    def test_duplicate_is_a_no_op(self):
+    def test_duplicate_does_not_create_a_second_entry(self):
         self.quiet(self.propose, "same rule")
         self.quiet(self.propose, "SAME RULE")          # case-insensitive
         self.assertEqual(len(I.load()), 1)
+
+    def test_duplicate_in_a_later_session_counts_as_the_re_trigger(self):
+        """The dead end this guards: `seen` was only ever incremented by an explicit
+        `seen` command that nothing in the instruction stack invoked, so every entry
+        sat at 1 until it expired and nothing could ever promote. A later session
+        independently proposing the same rule IS the recurrence evidence."""
+        self.quiet(self.propose, "recurring rule")
+        self.backdate("recurring rule")
+        self.quiet(self.propose, "recurring rule")
+        self.assertEqual(I.load()[0]["seen"], 2)
+
+    def test_same_day_re_propose_does_not_count(self):
+        """Otherwise one session could promote its own brand-new rule by repeating it."""
+        self.quiet(self.propose, "same day rule")
+        self.quiet(self.propose, "same day rule")
+        self.assertEqual(I.load()[0]["seen"], 1)
+
+    def test_a_re_trigger_records_its_own_evidence(self):
+        self.quiet(self.propose, "evidenced rule", origin="first correction")
+        self.backdate("evidenced rule")
+        self.quiet(self.propose, "evidenced rule", origin="second correction")
+        rec = I.load()[0].get("recurrences", [])
+        self.assertEqual(len(rec), 1)
+        self.assertIn("second correction", rec[0])
+
+    def test_promotion_is_reachable_through_propose_alone(self):
+        """End to end: nothing but the hook's own `propose` call is needed."""
+        self.quiet(self.propose, "reachable rule")
+        self.backdate("reachable rule")
+        self.quiet(self.propose, "reachable rule")
+        self.quiet(I.cmd_promote, Args(match="reachable", apply=True, force=False))
+        self.assertEqual(I.load(), [])
+        self.assertIn("reachable rule", self.rules.read_text(encoding="utf-8"))
 
     def test_cap_is_enforced_not_requested(self):
         """The old file grew unbounded at 3.22/week because nothing stopped it."""
@@ -112,12 +151,14 @@ class PromotionTests(QueueCase):
 
     def test_seen_earns_promotion(self):
         self.quiet(self.propose, "earned rule")
+        self.backdate("earned rule")
         _, out = self.quiet(I.cmd_seen, Args(match="earned"))
         self.assertIn("seen=2", out)
         self.assertIn("READY", out)
 
     def test_dry_run_writes_nothing(self):
         self.quiet(self.propose, "dry rule")
+        self.backdate("dry")
         self.quiet(I.cmd_seen, Args(match="dry"))
         _, out = self.quiet(I.cmd_promote, Args(match="dry", apply=False, force=False))
         self.assertIn("nothing written", out)
@@ -129,6 +170,7 @@ class PromotionTests(QueueCase):
         """agentcfg installs rules/ for Claude only, so agy takes the same content as a
         skill. A promotion that reached one stack would be a Claude-only disposition."""
         self.quiet(self.propose, "cross-stack rule", origin='User: "always do X"')
+        self.backdate("cross-stack")
         self.quiet(I.cmd_seen, Args(match="cross-stack"))
         self.quiet(I.cmd_promote, Args(match="cross-stack", apply=True, force=False))
         for path in (self.rules, self.agy):
@@ -138,6 +180,7 @@ class PromotionTests(QueueCase):
     def test_agy_copy_carries_skill_frontmatter(self):
         """agy loads skills, which must declare name/description to be discoverable."""
         self.quiet(self.propose, "frontmatter rule")
+        self.backdate("frontmatter")
         self.quiet(I.cmd_seen, Args(match="frontmatter"))
         self.quiet(I.cmd_promote, Args(match="frontmatter", apply=True, force=False))
         head = self.agy.read_text(encoding="utf-8")
@@ -148,6 +191,7 @@ class PromotionTests(QueueCase):
     def test_both_stacks_stay_in_step_across_promotions(self):
         for n in ("rule alpha", "rule beta"):
             self.quiet(self.propose, n)
+            self.backdate(n)
             self.quiet(I.cmd_seen, Args(match=n))
             self.quiet(I.cmd_promote, Args(match=n, apply=True, force=False))
         c = self.rules.read_text(encoding="utf-8")
@@ -158,6 +202,7 @@ class PromotionTests(QueueCase):
 
     def test_apply_moves_it_out_of_the_queue(self):
         self.quiet(self.propose, "real rule", origin='User: "do it this way"')
+        self.backdate("real rule")
         self.quiet(I.cmd_seen, Args(match="real rule"))
         self.quiet(I.cmd_promote, Args(match="real rule", apply=True, force=False))
         self.assertEqual(I.load(), [])
@@ -168,6 +213,7 @@ class PromotionTests(QueueCase):
     def test_promotion_appends_rather_than_clobbering(self):
         for n in ("first rule", "second rule"):
             self.quiet(self.propose, n)
+            self.backdate(n)
             self.quiet(I.cmd_seen, Args(match=n))
             self.quiet(I.cmd_promote, Args(match=n, apply=True, force=False))
         text = self.rules.read_text(encoding="utf-8")
@@ -185,11 +231,13 @@ class MatchTests(QueueCase):
         self.quiet(self.propose, "measure the thing")
         self.quiet(self.propose, "measure the other thing")
         with self.assertRaises(SystemExit) as cm:
+            self.backdate("measure")
             self.quiet(I.cmd_seen, Args(match="measure"))
         self.assertIn("matches 2 entries", str(cm.exception))
 
     def test_no_match_is_an_error(self):
         with self.assertRaises(SystemExit):
+            self.backdate("nothing like this")
             self.quiet(I.cmd_seen, Args(match="nothing like this"))
 
 

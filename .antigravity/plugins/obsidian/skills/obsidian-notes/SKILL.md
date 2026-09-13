@@ -168,6 +168,8 @@ python3 ~/.agent-configs/bin/instincts.py list
 
 A queued disposition does nothing until it is promoted into the always-loaded `learned-dispositions` guidance — `rules/learned-dispositions.md` for Claude, the `learned-dispositions` skill for agy. `instincts.py promote` writes both from one string, so the stacks cannot drift. Promotion requires re-triggering in a later session **and** the user's approval — always-on behavior is a direction-class write.
 
+**Always propose, even if the rule may already be queued.** An identical disposition proposed in a *later* session is counted as that re-trigger, and it is the only way anything ever earns promotion; a same-day repeat is ignored, so a session cannot promote its own new rule. `instincts.py list` shows what is pending.
+
 ---
 
 ## Pre-Compact Checkpoint
