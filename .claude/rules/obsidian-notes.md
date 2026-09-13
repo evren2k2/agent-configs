@@ -40,8 +40,9 @@ Six native MCP tools are registered and pre-approved. You MUST use one before `R
 
 **Workflow — bootstrap project context:**
 1. `vault_project(name=<project>)` → compact listing of all notes with status/type
-2. `vault_checkpoint(project=<project>)` if you need where the last session left off
-3. Pick the notes that actually bear on the task and read them per the tiers above — Tier 1 for anything under ~8 KB, Tier 2 for the big ones. Whole projects are readable at these sizes: only `rtlgen` (~224k tok) and `kahin-v1-internal` (~100k tok) need Tier 3; the other five are ≤39k tok in total.
+2. **Read the intent set** — the `decisions/` notes (direction: goals, scope calls, and the givens you are not free to change), plus `vocabulary.md` if the listing shows one. Small by design, and what stops you acting plausibly instead of correctly. See *Knowledge Classes* below.
+3. `vault_checkpoint(project=<project>)` if you need where the last session left off
+4. Then pull from the detail set **only** as the task demands, per the tiers above — Tier 1 for anything under ~8 KB, Tier 2 for the big ones. Never bulk-read `implementation/`. Whole projects are readable at these sizes: only `rtlgen` (~224k tok) and `kahin-v1-internal` (~100k tok) need Tier 3; the other five are ≤39k tok in total.
 
 ## Write Policy (classify BEFORE writing)
 The class of a note decides who authorizes it:
@@ -59,6 +60,55 @@ For classes 2-3 the quality bar still applies: write only when a future agent in
 - Project context was built that would take >5 minutes to reconstruct
 
 **Do NOT write when:** the interaction was trivial, the info is already in the codebase/git history/existing notes, or there's no reusable insight beyond what the commit message says.
+
+## Knowledge Classes (what KIND of note this is)
+
+The write policy above decides who authorizes a note. This decides where it lives and,
+more importantly, **whether a new agent reads it up front or only when a question sends it
+there**. The goal is that a fresh agent arrives holding the full intent of a project without
+wading through detail that does not bear on the task.
+
+Note: "intent set" / "detail set" here is about *what to read first*. It is unrelated to the
+Tier 1/2/3 policy at the top of this file, which is about *how to read* a note once chosen.
+
+### Intent set — read these first, every time
+Small, stable, and the difference between an agent acting correctly and acting plausibly.
+
+| Class | Answers | Lives in |
+|---|---|---|
+| **Direction** | what we are doing, what we chose to leave out, and what we are not free to change | `projects/<p>/decisions/` |
+| **Vocabulary** | what this project's terms mean *here* | `projects/<p>/vocabulary.md` (optional) |
+
+Direction covers two kinds of statement, and the difference is worth keeping visible even
+though both are direction. A **choice** is ours and can be revisited — *"the x/y edge case is
+out of scope."* A **given** is imposed from outside and is not ours to trade away — *"we must
+not modify openram; a fresh clone has to reproduce"*, *"the scripts run manually on the Pi."*
+Getting a choice wrong wastes work. Getting a given wrong breaks something beyond the project,
+which is why givens are worth stating flatly rather than leaving implied. When a project
+accumulates enough of them to scan on their own, put them in `decisions/constraints.md`.
+
+Direction is almost always the user's to set, so it is a direction-class write: propose, get
+approval, then write.
+
+Add `vocabulary.md` only where a project uses terms a competent outsider would misread
+(`Vmin`, `rechar`, `design_ev`). Most projects never need one.
+
+### Detail set — retrieve on demand, never bulk-read
+| Class | Answers | Lives in |
+|---|---|---|
+| **Implementation** | how it works; what a test actually validates | `projects/<p>/implementation/` |
+| **Findings** | what the data showed, and what was already tried | `implementation/`, or `findings/` when a project is mostly experimental |
+| **Operational** | how to run it, and what breaks when you do | `projects/<p>/operational.md` |
+
+**Findings vs Implementation** depends on the kind of project. *Developmental* projects (a
+tool, a repo, a flow) produce implementation knowledge: true until the code changes.
+*Experimental* projects (a test chip, a study) produce findings — measured results that carry
+their provenance (what was tried, on which units, in which session) and that get **superseded**
+by later data rather than simply becoming wrong. A findings note that drops its provenance
+cannot be superseded safely, because nothing records what it actually measured.
+
+**Dispositions are not knowledge and never go in the vault.** "How to work" rules belong in
+the `instincts.py` queue — see `instructions.md`.
 
 ## Frontmatter (REQUIRED)
 **Every note MUST have YAML frontmatter.** This is non-negotiable. Notes without frontmatter fail audit.
@@ -124,7 +174,7 @@ Append to `~/obsidian_notes/agent/connections.md` only for genuine cross-domain 
 - Never use filename prefixes as a substitute for folders.
 - **No `_index.md` hub files.** Project grouping uses `project:` frontmatter. Find notes with the Grep tool: `pattern: "project: <name>"`, `path: ~/obsidian_notes/`, `glob: "*.md"`.
   - **Carve-out for agent/hook files.** `agent_util`-tagged stubs and other hook-generated files are *exempt* from the `project:` requirement — for them, folder location is the grouping, and `vault_project`'s `frontmatter_project_match: false` is informational, not a failure. Genuine project logs (e.g. a project's `timeline.md`) should still carry `project:`.
-- **Folder depth**: projects may nest sub-folders as deep as needed — the vault tools handle arbitrary depth — but prefer 1–2 levels (e.g. `projects/my-project/{logs,decisions,implementation,archive}/note.md`) for readability and a legible graph. `projects/my-project/note.md` is also fine.
+- **Folder depth**: projects may nest sub-folders as deep as needed — the vault tools handle arbitrary depth — but prefer 1–2 levels (e.g. `projects/my-project/{decisions,implementation,findings,logs,archive}/note.md`) for readability and a legible graph. `projects/my-project/note.md` is also fine.
 - **Area promotion**: When a second project needs knowledge from the first, extract the shared concept to `areas/`.
 
 ## Archival
