@@ -54,9 +54,26 @@ Before writing ANY note to the vault, verify:
 - **No AI co-author trailer.** Do *not* append `Co-Authored-By: Claude ...` or any "Generated with Claude Code" line to commits. This overrides the harness default, which otherwise adds one.
 - **Match the repo's convention.** Read `git log` first and follow the existing commit style (subject format, conventional-type prefix, body/no-body, tense). Infer it per-repo — don't impose a default.
 
-## Instincts
+## Knowledge vs Dispositions
 
-Learned behavioral patterns live in `~/obsidian_notes/agent/instincts.yaml`. Each instinct has a `project:` field (`global` or project name). When a project-scoped instinct is validated at confidence >= 0.8 in 2+ projects, promote it to `project: global`.
+Two different things get learned in a session. They are stored differently because they are *triggered* differently.
+
+**Knowledge** — what is true about a system. *"Cosim reports 0 mismatches when an InPort is left undriven."* *"The signoff metric disagrees with the violation report because it counts only the worst path."* A specific situation brings it back, so it can sit in a **vault note** and be retrieved on demand. That is where it goes, per the write policy in `rules/obsidian-notes.md` — never in instincts.
+
+**Dispositions** — how to work. *"Never state an estimate you have not measured."* *"Verify a claim against the source before asserting it."* There is no situation to search on: the trigger is *any turn*. A disposition therefore does nothing unless it is already in context, which is why they are few, short, and capped.
+
+These live in `~/obsidian_notes/agent/instincts.yaml`, a capped **staging queue** managed by `bin/instincts.py`:
+
+```bash
+python3 ~/.agent-configs/bin/instincts.py propose --disposition '<rule>' --origin '<verbatim user correction>' --project <p>
+python3 ~/.agent-configs/bin/instincts.py list
+```
+
+The source of a disposition is a **user correction** — a moment your scope, your rigor, an assumption, or an unmeasured claim had to be fixed — not a retrospective on what the task taught. Asking "what did I learn?" reliably returns knowledge; asking "where was I corrected?" is what surfaces a disposition.
+
+The test: if the rule stops being true when you switch projects, it is knowledge. Write the note instead.
+
+Queued dispositions do nothing until promoted into `rules/learned-dispositions.md`, which every session loads. Promotion requires the disposition to have re-triggered in a later session *and* the user's approval — it is a direction-class write. Never edit that rules file by hand; use `instincts.py promote --apply`.
 # graphify
 - **graphify** (`.claude/skills/graphify/SKILL.md`) - any input to knowledge graph. Trigger: `/graphify`
 When the user types `/graphify`, invoke the Skill tool with `skill: "graphify"` before doing anything else.

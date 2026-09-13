@@ -36,7 +36,7 @@ The vault is Claude's **external brain** — persistent, cross-session memory wh
     ├── session-log.md      Running log (append-only)
     ├── open-questions.md   Unresolved questions (append-only)
     ├── connections.md      Cross-domain links (append-only)
-    └── instincts.yaml      Learned behavioral patterns with confidence
+    └── instincts.yaml      Disposition staging queue (bin/instincts.py; capped)
 ```
 
 ### Subfolder Rules
@@ -151,14 +151,22 @@ Only add genuine cross-domain connections. Forced connections degrade signal.
 
 ---
 
-## Instincts (Learned Patterns)
+## Instincts (Dispositions Only)
 
-`agent/instincts.yaml` tracks behavioral patterns learned across sessions. Each instinct has a confidence score (0.0-1.0) that evolves:
-- **Increases** when the pattern is validated in practice
-- **Decreases** when contradicted
-- **Pruned** below 0.3 confidence
+`agent/instincts.yaml` is a **capped staging queue for dispositions** — how to work, not what is true about a system. It is managed by `bin/instincts.py`; do not hand-edit it.
 
-When you notice a reusable pattern, add it. When an instinct proves wrong, lower its confidence or remove it.
+**What belongs here:** a rule whose trigger is *any turn* — *"never state an estimate you have not measured"*, *"verify a claim against the source before asserting it"*. These come from moments the **user corrected you**: your scope, your rigor, an assumption, an unmeasured claim.
+
+**What does not:** anything a specific situation brings back. *"Cosim reports 0 mismatches when an InPort is undriven"*, *"the signoff metric counts only the worst path"* are **knowledge** — they go in a project note, which is indexed and retrieved on demand. The test is whether the rule stops being true when you switch projects.
+
+Under the previous methodology every single entry was knowledge in the wrong container: none ever recurred, and nothing ever read the file.
+
+```bash
+python3 ~/.agent-configs/bin/instincts.py propose --disposition '<rule>' --origin '<verbatim correction>' --project <p>
+python3 ~/.agent-configs/bin/instincts.py list
+```
+
+A queued disposition does nothing until it is promoted into the always-loaded `learned-dispositions` guidance — `rules/learned-dispositions.md` for Claude, the `learned-dispositions` skill for agy. `instincts.py promote` writes both from one string, so the stacks cannot drift. Promotion requires re-triggering in a later session **and** the user's approval — always-on behavior is a direction-class write.
 
 ---
 

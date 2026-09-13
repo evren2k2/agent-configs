@@ -30,5 +30,17 @@ ACTIVITY="$MARK_DIR/activity-$KEY"
 [ -e "$ACTIVITY" ] || exit 0     # no vault work since the last reminder → stay quiet
 rm -f "$ACTIVITY"                # consume it; the next vault write re-arms the reminder
 
-MSG="SESSION LOG REMINDER: If this was a meaningful session, consider appending to ~/obsidian_notes/agent/session-log.md (what worked, what failed, key decisions, connections). PATTERN CHECK: did any reusable pattern emerge worth adding to ~/obsidian_notes/agent/instincts.yaml?"
+# Two asks, deliberately separated by CLASS. The old
+# single "did any reusable pattern emerge?" was asked at end-of-turn with session
+# specifics at peak salience, so it returned a situation-specific technical lesson every
+# time — 30 of 30 entries, none of which ever recurred, in a file nothing read. Knowledge
+# and disposition need different questions because they come from different places:
+# knowledge from what the work taught, disposition from where the USER had to correct us.
+MSG="SESSION LOG REMINDER: If this was a meaningful session, consider appending to ~/obsidian_notes/agent/session-log.md (what worked, what failed, key decisions, connections).
+
+KNOWLEDGE CHECK: did this session establish something durable about how a system behaves — a non-obvious constraint, a weakness, something that will clash with future work? That belongs in a vault project note (projects/<p>/implementation/), NOT in instincts. Skip it if the code, the commit, or an existing note already says it.
+
+DISPOSITION CHECK: did the user CORRECT you this session — your scope, your rigor, an assumption, an unmeasured claim? Do not ask what the task taught you; that returns knowledge. Ask where you were corrected. If there was such a moment, name the one-line rule that would have prevented it and queue it:
+  python3 ~/.agent-configs/bin/instincts.py propose --disposition '<the rule>' --origin '<quote the user verbatim>' --project <p>
+A disposition is about HOW to work and must hold on any turn. The test: if the rule stops being true when you switch projects, it is knowledge — write the note instead. No correction this session means nothing to queue; that is the normal case."
 python3 -c 'import json,sys; print(json.dumps({"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":sys.argv[1]}}))' "$MSG"
