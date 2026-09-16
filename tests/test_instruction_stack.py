@@ -313,6 +313,7 @@ class SkillMirrorTests(unittest.TestCase):
         "compose-docs": "general",
         "paper-outline": "general",
         "isscc-figure": "general",
+        "paper-draft": "general",
         "checkpoint": "obsidian",
         "project-archaeology": "obsidian",
     }
