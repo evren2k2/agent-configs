@@ -1,201 +1,171 @@
 # Agent Configs
 
-A centralized repository for shared configurations, rules, and skills for **Claude Code** and **Antigravity CLI** (`agy`).
+One instruction stack for two coding agents — **Claude Code** and **Antigravity CLI** (`agy`) — plus the tooling that gives them a shared long-term memory: an Obsidian vault the agents read at session start and write to as they work, checkpoints that carry your intent across sessions, a queue for the corrections you make to how the agent works, and optional adversarial review and code-graph navigation.
 
-> Gemini CLI support was retired after Google deprecated it (service to AI Pro/Ultra ended June 18, 2026). `.antigravity/` is now the single Google-side config tree; `agy` still lives under `~/.gemini/`, so paths like `~/.gemini/antigravity-cli/` and `~/.gemini/config/mcp_config.json` below refer to agy, not gemini-cli.
+Everything here is installed by one command and kept in sync with the repo by symlinks, so editing a rule or a skill in this checkout changes every agent immediately.
 
-## Structure
+## What you get
 
-- `.claude/`: Configuration for Claude Code (`~/.claude/`)
-- `.antigravity/plugins/`: Plugin packages for Antigravity CLI (`~/.gemini/antigravity-cli/plugins/`)
-  - `obsidian/`: vault-related skills + vault-mcp server + hooks
-  - `general/`: general behavioral skills (no MCP, no hooks)
-- `hooks/`: Shared shell scripts for session management and vault validation. Referenced by the Claude Code and antigravity hook configs.
-- `santa-method.json.example`: Template reviewer config for the optional `santa-method` skill; copy to the gitignored, machine-local `santa-method.json` to activate — see [Santa Method](#santa-method-optional-adversarial-review).
-- `bin/`: the `vault` CLI, the `vault-mcp` server (launched via `vault-mcp-launcher.sh` / `.cmd`), and **`agentcfg`** — the cross-platform installer (`install` / `update` / `uninstall` / `status` / `init-vault`).
-- `setup-graphify.py`: optional, independent installer for the graphify code-knowledge-graph integration (Claude-only, separate from the vault install).
+| Piece | What it does | Where |
+|---|---|---|
+| **Vault memory** | Six MCP tools (`vault_find`, `vault_semantic_search`, `vault_project`, `vault_show`, `vault_links`, `vault_checkpoint`) over `~/obsidian_notes`, served to both agents by one `vault-mcp` server. | `bin/vault-mcp.py`, `bin/vault.py` |
+| **Checkpoints** | A per-project circular buffer of "briefings for the next agent" with a verbatim **User Intent ledger** carried forward on every write; a reader that flags a dropped ledger; a hook that repairs hand-edited files. | `bin/checkpoint.py`, `.claude/skills/checkpoint/` |
+| **Dispositions** | A capped queue of "how to work" rules learned from your corrections, scoped **per project** by default, promoted into always-loaded files only after recurring and only with your approval. | `bin/instincts.py`, `~/obsidian_notes/agent/instincts.yaml` |
+| **Rules & skills** | Behavioral guidelines, vault rules, and task skills (`checkpoint`, `obsidian-notes`, `obsidian-audit`, `project-archaeology`, `compose-docs`, `architect-interview`, `paper-outline`, `paper-draft`, `isscc-figure`, `santa-method`, `graphify`). Mirrored for both agents; a test fails if they drift. | `.claude/`, `.antigravity/plugins/` |
+| **Hooks** | Session start (project + working mode + checkpoint pointer), vault-write validation, checkpoint repair, pre-compact snapshot, end-of-turn knowledge/disposition check. | `hooks/` |
+| **Santa Method** (optional) | Two independent reviewers must both PASS before high-stakes output ships. Off until you configure a reviewer. | `santa-method.json.example` |
+| **graphify** (optional) | Code knowledge graph with `query` / `path` / `explain`, as a skill and an MCP server for both agents. | `setup-graphify.py`, `.antigravity/plugins/graphify/` |
 
-## Requirements
+## Install
 
-- **Git:** Required for cloning and version control. **Git Bash** is specifically required on Windows to execute the shell-based hooks.
-- **Node.js & npm:** Required for Claude Code installation and hook execution.
-- **Python 3.8+:** Required for the vault graph engine and MCP server (`vault` CLI / `vault-mcp`). Semantic search (`vault embed` / `vault_semantic_search`) additionally needs the packages in `requirements.txt` (`sentence-transformers`, `numpy`) — `agentcfg install` installs them automatically. The core vault tooling works without them.
-- **Obsidian Notes:** The hooks are hardcoded to look for the vault at `~/obsidian_notes` (`C:\Users\<user>\obsidian_notes` on Windows). This folder **must** be placed exactly there for the hooks to function.
-- **Permissions:** 
-    - **Linux/macOS:** Standard user permissions are sufficient.
-    - **Windows:** `agentcfg` creates Symbolic Links (requires Developer Mode or Admin); without those it automatically falls back to **copies** (re-run `agentcfg update` after editing repo files to re-sync).
+**Requirements.** Git (Git Bash on Windows — the hooks are shell scripts), Node.js for Claude Code, Python 3.8+ for the vault tools. Semantic search needs `requirements.txt` (`sentence-transformers`, `numpy`); `agentcfg install` installs them, and the rest works without them. The vault must live at `~/obsidian_notes` (`C:\Users\<user>\obsidian_notes`). On Windows, `agentcfg` makes symlinks when it can (Developer Mode or admin) and falls back to copies otherwise — re-run `agentcfg update` after editing the repo in that case.
 
-## Setup Instructions
+**1. Install the agents you use.** `npm install -g @anthropic/claude-code` and/or `curl -fsSL https://antigravity.google/cli/install.sh | bash` (`irm https://antigravity.google/cli/install.ps1 | iex` on Windows; the binary lands at `%LOCALAPPDATA%\agy\bin\agy.exe`). Run `agy` once to complete the browser sign-in before using it in print mode.
 
-### 1. Install the CLIs
-
-Make sure the agents you want to use are installed first. `agentcfg` wires configs but does not install the tools themselves.
-
-**Antigravity CLI (`agy`):**
-```bash
-# Linux / macOS
-curl -fsSL https://antigravity.google/cli/install.sh | bash
-
-# Windows (PowerShell)
-irm https://antigravity.google/cli/install.ps1 | iex
-```
-The Windows installer drops the binary at `%LOCALAPPDATA%\agy\bin\agy.exe` and appends it to the user PATH. Restart your terminal after installing.
-
-**Claude Code** installs per its docs (`npm install -g @anthropic/claude-code`).
-
-### 2. Link Configurations
-Clone this repository into your home directory (or any preferred location), then run the installer — a single cross-platform Python tool (`bin/agentcfg`) that replaces the old `setup.sh`/`setup.ps1`:
+**2. Clone and link.**
 
 ```bash
-python3 bin/agentcfg install --apply     # omit --apply for a dry-run preview
+git clone <this-repo> ~/agent-configs
+python3 ~/agent-configs/bin/agentcfg install --apply     # omit --apply for a dry run
 ```
 
-It is **non-destructive**: it merges a marked block from `.claude/instructions.md` into an existing `~/.claude/CLAUDE.md` and deep-merges keys into `settings.json` (never overwriting your own config), and drops per-skill symlinks (copies on locked-down Windows) into your config dirs. Manage it anytime:
+`agentcfg` is non-destructive: it merges a marked block into `~/.claude/CLAUDE.md`, deep-merges its keys into `~/.claude/settings.json` (backing up yours), drops per-item symlinks into `~/.claude/{rules,skills}`, links each `.antigravity/plugins/<name>/` where `agy` discovers plugins and runs `agy plugin install` on it, registers the `vault-mcp` server with both agents, and links the repo at `~/.agent-configs` so hooks and scripts have a fixed path. Later:
 
 ```bash
-agentcfg status               # what's installed / drifted
-agentcfg update --apply       # re-sync after editing repo .claude/instructions.md / settings.json
-agentcfg uninstall --apply    # cleanly remove everything (restores backups)
+agentcfg status               # what is installed, what drifted
+agentcfg update --apply       # re-sync after editing instructions.md / settings.json
+agentcfg uninstall --apply    # remove everything, restore backups
 ```
 
-`agentcfg` symlinks (or copies) each `.antigravity/plugins/<name>/` directory into `~/.gemini/antigravity-cli/plugins/<name>/` — `agy` discovers them automatically. Existing agy-imported gemini extensions in the same parent directory are left untouched.
+**3. Vault.** Either `git clone <your-vault-url> ~/obsidian_notes`, or start fresh with `python3 bin/agentcfg init-vault --apply` and follow the printed steps to attach a private remote.
 
-### 3. Initialize or Connect your Vault
-The configurations expect an Obsidian vault at `~/obsidian_notes`. 
+**4. Optional: graphify.** `python3 setup-graphify.py` creates `~/.graphify-venv`, puts `graphify` and `graphify-mcp` on your PATH, and installs the agy plugin. Then `python3 setup-graphify.py /path/to/project` registers it for Claude in that project (skill, `CLAUDE.md` section, hooks, `.mcp.json`). Build a graph with `graphify extract .` or the in-session `/graphify` skill; the agy side needs no per-project step because its MCP server resolves `graphify-out/graph.json` relative to where you launch `agy`.
 
-#### If you already have a vault repo:
-```bash
-git clone <your-vault-url> ~/obsidian_notes
-```
+**5. Optional: Santa Method.** `cp santa-method.json.example santa-method.json` and trim it to the reviewer CLIs you have. See [Reviews](#reviews-santa-method) below.
 
-#### If you want to start a fresh vault:
-Create the required directory structure (`areas/`, `agent/`, etc.) and a local Git repo with:
-```bash
-python3 bin/agentcfg init-vault --apply     # omit --apply for a dry-run preview
-```
-Then follow the printed instructions to link it to a private GitHub repository.
+**6. Optional: sync.** A cron job or scheduled task that commits and pushes the vault every five minutes — see [Keeping the vault in sync](#keeping-the-vault-in-sync).
 
-## Features
+## Using it day to day
 
-### Centralized Hooks
-Hooks are now managed within this repository in the `hooks/` directory, making it easier to update logic across all agent configurations. These hooks handle:
-- **Session Lifecycle:** Context loading and cleanup.
-- **Compaction Safety:** State persistence before context compression (manual compacts only; automatic ones are skipped).
-- **Validation:** Vault integrity checks after file edits, surfaced back to the model as hook feedback (`additionalContext`), not just logged.
+The patterns below are generalized from real sessions. None of them need special commands; they are things you say to the agent, and the stack makes them work.
 
-### Santa Method (optional adversarial review)
+### Start a session by pointing at the memory
 
-`santa-method` is a skill (mirrored across Claude and Antigravity) that gates high-stakes output — pre-tapeout RTL, verification infra, production scripts — behind two independent reviewers that must both PASS before shipping.
+> *"Please read the most recent vault checkpoint and get situated with the necessary files, then let's discuss next steps."*
 
-It is **off by default**: `santa-method.json` is gitignored and absent on a fresh clone, so `session-start.sh` emits nothing about santa and the skill stays dormant. To activate it on a machine, copy the tracked template — **`santa-method.json.example`** — to **`santa-method.json`**, then trim it to the reviewer CLIs you actually have installed + authed:
+At session start the hook has already told the agent which vault project matches the working directory, how to read the last checkpoint (`vault_checkpoint`, with a Bash fallback), and — if the project has one — its **working mode**: your standing rulings on how that project is run, printed verbatim because they bind before the first action. The agent then enumerates the project's notes with `vault_project`, reads the direction notes and the checkpoint itself, and only pulls implementation detail the task needs. The read policy is three tiers (read it yourself; read a line range of a big note; delegate breadth only, with verbatim quotes back), and it forbids paraphrasing a number, path or error string the agent could have read.
 
-```bash
-cp santa-method.json.example santa-method.json
-```
+### Discuss first, then build
 
-The skill substitutes `{focus}` (the review angle) and `{files}` (target paths) into each `command`. Subscription CLIs work without API keys; the template ships two divergent reviewers (`agy`, `claude`), e.g.:
+> *"Let's discuss and settle the open questions first and modify the plan accordingly; then we will address the plan."*
 
-```json
-{ "reviewers": [
-  { "name": "agy",
-    "command": "agy --print-timeout 20m -p \"Adversarial review — {focus}. Target files: {files}. Static analysis only. End with exactly one line: VERDICT: PASS or VERDICT: FAIL.\"" }
-] }
-```
+The agent proposes a plan with its tradeoffs; you decide. Anything that sets or records **direction** — goals, scope calls, decisions, working mode — is written to the vault only after you approve it. Implementation findings the agent discovers while working are written autonomously but only when they are need-to-know. Notes the agent thinks are direction but you have not ratified stay proposals.
 
-The `agy --print-timeout 20m` is deliberate — agy's `-p` print mode defaults to a 5-minute timeout and will otherwise cut a long review off before the final `VERDICT:` line (the response comes back truncated, with no verdict). Don't drop that flag. See the *Truncated / incomplete runs* section in any agent's `santa-method` SKILL.md for the full failure mode.
+### Checkpoint before the context gets heavy
 
-(`claude -p --model <model-you-have> "..."` and codex's `adversarial-review` channel work the same way — see any agent's `santa-method` SKILL.md for the codex example and the full method: two divergent angles, both-PASS gate, ≤3 iterations.)
+> *"Can you update the checkpoint? This is a close to ideal state for a new session."* — or just `/checkpoint`.
 
-### Antigravity CLI plugins
-
-**First-time auth:** agy v1.0.0 requires an interactive login before it will execute prompts (browser-based Google OAuth). Run `agy` once after install, sign in, then `Ctrl+C` to exit. Subsequent invocations (including `-p` print mode) work without prompting.
-
-**Verifying the plugins load:** once signed in, smoke-test with
-```bash
-agy -p "List the names of all MCP tools available to you, comma-separated."
-```
-The output should include the five `vault_*` tools (`vault_find`, `vault_semantic_search`, `vault_project`, `vault_show`, `vault_links`). If they're missing, the `obsidian` plugin's `mcp_config.json` isn't being picked up — verify the link (or copy, on Windows) at `~/.gemini/antigravity-cli/plugins/obsidian` and re-run `agy plugin validate <that path>`.
-
-Each subdirectory under `.antigravity/plugins/` is a self-contained agy plugin. Layout per plugin:
-
-```
-.antigravity/plugins/<name>/
-├── plugin.json           # { "name": "<name>" } — required manifest
-├── mcp_config.json       # optional; { "mcpServers": { ... } }
-├── hooks/hooks.json      # optional; event → command bindings
-└── skills/<skill>/SKILL.md
-```
-
-Two plugins ship in this repo:
-- **`obsidian`** — `vault-mcp` server + obsidian-notes / obsidian-audit / project-archaeology / checkpoint / obsidian-vault-rules skills + all session/post-tool hooks
-- **`general`** — architect-interview + behavioral-guidelines + paper-outline + paper-draft + santa-method skills (no MCP, no hooks)
-
-**Hook events (Antigravity CLI v1.0.0):**
-
-Confirmed event names per the `/hooks` panel in agy v1.0.0: `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`. Bindings in `.antigravity/plugins/obsidian/hooks/hooks.json`:
-- `PreInvocation` → `session-start.sh` *(fires before every LLM invocation, not once per session — the script must stay idempotent / self-throttling)*
-- `PostToolUse` with matchers `Write` / `Edit` → vault validators
-- `Stop` → `session-stop.sh`
-- Pre-compaction has **no agy event.** Run `bash ~/.agent-configs/hooks/pre-compact.sh` manually before `/compact` if needed.
-
-If a hook isn't firing, double-check the event name against `/hooks` in your agy session, then re-validate with `agy plugin validate ~/.gemini/antigravity-cli/plugins/obsidian`.
-
-**Single source of truth:** with gemini-cli retired, `.antigravity/plugins/obsidian/skills/` is the only Google-side copy of the vault skills (Claude's copies live in `.claude/skills/`).
-
-## Synchronization (Automation)
-
-To keep your vault synced across machines, set up an automated task to run the synchronization script. These scripts automatically handle merge conflicts by favoring local changes (`-X ours`).
-
-### 1. Add Automated Task
-
-#### Linux / macOS (Cron)
-Run `crontab -e` and add the following line to sync every 5 minutes:
+A checkpoint is a briefing for the next agent, not a status report. Its first section is the **User Intent ledger**: a numbered, verbatim record of everything you asked for and every correction you made, carried forward into every new checkpoint so the newest entry is always self-sufficient. The agent writes it with one call:
 
 ```bash
+cat <<'EOF' | python3 ~/.agent-configs/bin/checkpoint.py write --project <project>
+## Checkpoint — 2026-09-21 16:00 (topic)
+### User Intent
+<new items only — the previous ledger is spliced in automatically>
+...
+EOF
+```
+
+That one call carries the ledger, inserts the record separator, trims to the last five, and appends a digest to the project's append-only `timeline.md`. Never let the agent append to `working-context.md` by hand: an entry written that way lost the ledger in a real session, and the next session acted without your instructions. Two defences now cover that path: `vault_checkpoint` prints a **LEDGER GAP** banner with the dropped items when the newest entry did not carry them, and a hook on the shell tool runs `checkpoint.py repair` whenever a command touches a `working-context.md`.
+
+### When you correct the agent, the correction is kept
+
+> *"When I said the hook looks good, I meant your proposal for the hook modification looked good."*
+> *"The outline is NOT the hard truth for what needs to be done; I am."*
+
+Corrections like these are **dispositions**: how to work, not what is true about a system. At the end of a turn that wrote to the vault, the Stop hook asks the agent where it was corrected and has it queue a one-line rule with your words as provenance:
+
+```bash
+python3 ~/.agent-configs/bin/instincts.py propose --disposition '<rule>' --origin '<your words>' --project <p> [--scope global]
+python3 ~/.agent-configs/bin/instincts.py list            # what is queued, with scope
+```
+
+Dispositions are **project-scoped by default**, because projects differ in method: a rule about who writes verification on one project should not govern a paper-writing project. A queued rule does nothing until it recurs in a later session **and** you approve its promotion:
+
+```bash
+python3 ~/.agent-configs/bin/instincts.py promote --match '<text>'            # dry run: shows the block and the target
+python3 ~/.agent-configs/bin/instincts.py promote --match '<text>' --apply    # after your approval
+```
+
+Promotion routes on scope. A project rule lands in `projects/<p>/decisions/working-mode.md` in the vault, which the session-start hook prints for that project. A global rule (`--scope global`, or overridden at promotion) lands in `.claude/rules/learned-dispositions.md` and its agy mirror, loaded in every session. The signal that a project rule is really global is the same rule being proposed from a second project; `propose` records that and says so. The queue is capped at 15 and a rule that never recurs expires, so the always-on budget cannot grow unbounded.
+
+### Knowledge goes in the vault, in the right class
+
+What the agent learns about a system — a non-obvious constraint, a weakness, something that will clash with future work — is a vault note, retrieved on demand. The vault rules classify notes so a fresh agent reads intent before detail:
+
+| Read first | `projects/<p>/decisions/` (direction, constraints, working mode), `projects/<p>/vocabulary.md` if the project needs one |
+| Read on demand | `projects/<p>/implementation/` (how it works), `findings/` (what the data showed, with provenance), `operational.md` (how to run it) |
+| Durable, cross-project | `areas/` (promoted when a second project needs it), `library/` (reference) |
+
+Every note has YAML frontmatter (`date`, `tags`, `type`, `status`, `project`), a lowercase-hyphenated filename, and at least one `[[wikilink]]`; a hook validates each write and tells the agent what to fix.
+
+### Reviews: Santa Method
+
+For output that ships without a human reading every line — pre-tapeout RTL, verification infrastructure, production scripts — the `santa-method` skill runs two independent reviewers with different angles and requires both to end with `VERDICT: PASS`. It is off until `santa-method.json` exists. The template ships `agy` and `claude` as reviewers; keep `agy --print-timeout 20m`, since agy's print mode otherwise cuts a long review off before its verdict line. Subscription CLIs work without API keys. A project's working mode can turn santa off for that project; the working-mode block printed at session start overrides the generic hook line.
+
+### Codebase questions: graphify
+
+With a graph built, both agents are told to run `graphify query "<question>"` before grepping, `graphify path "A" "B"` for relationships, and `graphify explain "X"` for one concept, and to run `graphify update .` after changing code. The same tools are exposed over MCP (`query_graph`, `shortest_path`, `get_node`, ...) to Claude per project and to agy globally.
+
+## Repository layout
+
+```
+.claude/
+  instructions.md        global instructions, merged into ~/.claude/CLAUDE.md (named this way so the
+                         repo's own CLAUDE.md is not injected twice when the CWD is this repo)
+  rules/                 behavioral-guidelines.md, obsidian-notes.md (+ learned-dispositions.md once promoted)
+  skills/                one directory per skill
+  settings.json          hooks + permissions, deep-merged into ~/.claude/settings.json
+.antigravity/plugins/
+  obsidian/              vault skills, vault-mcp server, all session/post-tool hooks
+  general/               task skills with no MCP or hooks
+  graphify/              graphify skill + references + graphify MCP server
+bin/                     agentcfg (installer), vault.py / vault-mcp.py, checkpoint.py, instincts.py, vault_embed.py
+hooks/                   shell scripts referenced by both agents' hook configs, plus the vault sync scripts
+tests/                   unit tests for every script and a regression suite for the instruction stack
+setup-graphify.py        standalone graphify installer (venv, PATH, Claude per-project, agy plugin)
+santa-method.json.example
+```
+
+## Claude Code vs. Antigravity CLI
+
+The content is one stack; the delivery differs.
+
+- **Claude Code** reads `~/.claude/CLAUDE.md`, `~/.claude/rules/*.md` and `~/.claude/skills/*/SKILL.md`, and fires hooks from `~/.claude/settings.json`. Rules are always in context.
+- **agy** loads plugins from `~/.gemini/antigravity-cli/plugins/<name>/` (`plugin.json`, optional `mcp_config.json`, `hooks/hooks.json`, `skills/<skill>/SKILL.md`). It has no always-loaded rules file, so the rules ship as skills (`behavioral-guidelines`, `obsidian-vault-rules`) and are loaded on demand. Hook events confirmed in agy 1.x: `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`. `PreInvocation` runs `session-start.sh` before every model call, so that script stays idempotent. There is no pre-compaction event; run `bash ~/.agent-configs/hooks/pre-compact.sh` yourself before `/compact` if you want the snapshot.
+- **Verify agy** sees everything: `agy -p "List the names of all MCP tools available to you, comma-separated."` should return the six `vault_*` tools and, with graphify installed, `query_graph`, `shortest_path`, `get_node` and friends. If not, `agy plugin validate ~/.gemini/antigravity-cli/plugins/<name>` and `agy plugin list` show what loaded.
+- Gemini CLI support was retired when Google ended the service; `~/.gemini/` paths in this repo refer to agy's own config, not gemini-cli.
+
+## Keeping the vault in sync
+
+`hooks/server-sync.sh` (and `server-sync.ps1`) commit and push the vault, resolving conflicts in favour of local changes, with `flock` against overlapping runs and log rotation.
+
+```bash
+# Linux / macOS: crontab -e
 */5 * * * * $HOME/.agent-configs/hooks/server-sync.sh > /dev/null 2>&1
 ```
 
-(`~/.agent-configs` is the namespace link `agentcfg install` creates, so this works regardless of where the repo is cloned. Overlapping runs are prevented with `flock`, and `sync.log` is rotated automatically.)
-
-#### Windows Task Scheduler (Silent Sync)
-To prevent a PowerShell window from flashing every 5 minutes, use the provided VBScript wrapper.
-
-1. **Verify the wrapper exists:** Ensure `agent-configs/hooks/silent-sync.vbs` is present.
-2. **Create or Update the Task:** Run the following command in an administrator terminal:
-
 ```powershell
+# Windows, from an administrator terminal (the VBScript wrapper keeps the window hidden)
 schtasks /create /sc minute /mo 5 /tn "sync obsidian" /tr "wscript.exe %USERPROFILE%\.agent-configs\hooks\silent-sync.vbs" /it /f
 ```
 
+In Task Scheduler choose "Run only when user is logged on" (Git credentials need the session), stop the task if it runs longer than two minutes, and force-stop if it does not end. Run the script directly for an immediate sync.
 
-- **Program/script:** `wscript.exe`
-- **Add arguments:** `"%USERPROFILE%\.agent-configs\hooks\silent-sync.vbs"`
-- **Settings (Critical):**
-    - **General:** Select "Run only when user is logged on" (required for Git credential access).
-    - **Settings:** Enable "Stop the task if it runs longer than" (set to **2 minutes** via `/k` in the command above).
-    - **Settings:** Enable "If the running task does not end when requested, force it to stop."
+## Tests
 
-
-### 2. Manual Sync
-If you need to sync immediately, you can run:
-
-**Bash:**
 ```bash
-$HOME/.agent-configs/hooks/server-sync.sh
+python3 -m unittest discover tests -v
 ```
 
-**PowerShell:**
-```powershell
-.\hooks\server-sync.ps1
-```
-
-## Note Conventions
-
-When working with the vault, follow these conventions to ensure agent compatibility:
-
-- **Filenames:** Use `lowercase-hyphenated.md`.
-- **Structure:**
-    - `projects/<name>/working-context.md`: Critical for session recovery and project tracking.
-    - `areas/`: Long-term knowledge storage.
-- **Git Integration:** On manual compaction, the `pre-compact` hook snapshots the git state of the current working directory and the vault itself into `agent/pre-compact-snapshot.md` (scan deliberately bounded to stay within the hook timeout).
-
+`test_checkpoint`, `test_instincts`, `test_vault`, `test_vault_mcp`, `test_embed` and `test_agentcfg` cover the scripts. `test_instruction_stack` guards what lives in prose and config: no double-injected instructions, the three-tier read policy, qualified MCP tool ids, byte-identical Claude/agy skill mirrors (including graphify's references), the checkpoint ledger defences, and scoped dispositions. Run it after editing anything under `.claude/` or `.antigravity/`.
