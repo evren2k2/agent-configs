@@ -39,7 +39,7 @@ agentcfg uninstall --apply    # remove everything, restore backups
 
 **3. Vault.** Either `git clone <your-vault-url> ~/obsidian_notes`, or start fresh with `python3 bin/agentcfg init-vault --apply` and follow the printed steps to attach a private remote.
 
-**4. Optional: graphify.** `python3 setup-graphify.py` creates `~/.graphify-venv`, puts `graphify` and `graphify-mcp` on your PATH, and installs the agy plugin. Then `python3 setup-graphify.py /path/to/project` registers it for Claude in that project (skill, `CLAUDE.md` section, hooks, `.mcp.json`). Build a graph with `graphify extract .` or the in-session `/graphify` skill; the agy side needs no per-project step because its MCP server resolves `graphify-out/graph.json` relative to where you launch `agy`.
+**4. Optional: graphify.** `python3 setup-graphify.py` creates `~/.graphify-venv`, puts `graphify` and `graphify-mcp` on your PATH, and installs the agy plugin. Then `python3 setup-graphify.py /path/to/project` registers it for Claude in that project (skill, `CLAUDE.md` section, hooks, `.mcp.json`). Build a graph with `graphify extract .` or the in-session `/graphify` skill; the agy side needs no per-project step because its MCP server resolves `graphify-out/graph.json` relative to where you launch `agy`. The venv is installed once and never upgraded on its own, so the version is effectively pinned; `python3 setup-graphify.py --upgrade` moves the package and both skill copies (Claude and agy) together and prints what to re-run afterwards. Review the skill diff before committing, since it lands in every session.
 
 **5. Optional: Santa Method.** `cp santa-method.json.example santa-method.json` and trim it to the reviewer CLIs you have. See [Reviews](#reviews-santa-method) below.
 

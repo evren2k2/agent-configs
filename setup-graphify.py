@@ -20,6 +20,17 @@ Per assistant:
 Usage:
   python3 setup-graphify.py                    # GLOBAL: venv + PATH links + agy plugin
   python3 setup-graphify.py /path/to/project   # global (idempotent) + register claude there
+  python3 setup-graphify.py --upgrade          # newest graphifyy + refresh BOTH skill copies
+
+Versioning: the venv gets whatever graphifyy is current when it is created and is
+never touched again by the plain install (it only checks the binary exists), so a
+machine is effectively pinned by accident. The repo's two skill copies
+(.claude/skills/graphify and the agy plugin) are stamped with the version that
+wrote them; graphify warns when stamp and package disagree. `--upgrade` moves all
+three together: pip upgrade, `graphify install` redirected into the repo's Claude
+copy via CLAUDE_CONFIG_DIR, then a byte-identical mirror into the agy plugin.
+Review the resulting diff before committing — the skill lands in every session —
+and run `graphify update .` in each project, since graph.json may change shape.
 
 Env overrides:
   GRAPHIFY_VENV     venv location              (default ~/.graphify-venv)
@@ -113,6 +124,54 @@ def ensure_agy_plugin():
         print(f"[graphify] WARNING: `agy plugin install` failed: {getattr(e, 'stderr', e)}")
 
 
+# --- upgrade: package + both skill copies move together --------------------------------
+def _version() -> str:
+    try:
+        out = subprocess.run([str(VENV_PY), "-m", "pip", "show", "graphifyy"],
+                             capture_output=True, text=True, timeout=60).stdout
+        return next((l.split(":", 1)[1].strip() for l in out.splitlines()
+                     if l.lower().startswith("version:")), "?")
+    except Exception:
+        return "?"
+
+
+def upgrade():
+    import shutil
+    before = _version()
+    print(f"[graphify] installed {before}; upgrading {PKG}")
+    run([VENV_PY, "-m", "pip", "install", "--quiet", "--upgrade", PKG])
+    after = _version()
+    print(f"[graphify] package {before} -> {after}")
+
+    # Refresh the repo's Claude skill copy. graphify honours CLAUDE_CONFIG_DIR for the
+    # skill destination, so point it at <repo>/.claude and it rewrites SKILL.md,
+    # references/ and .graphify_version there — the copy agentcfg symlinks into
+    # ~/.claude/skills. (It also looks at ~/.claude/CLAUDE.md, finds "graphify"
+    # already registered by the merged instructions block, and leaves it alone.)
+    claude_skill = REPO / ".claude" / "skills" / "graphify"
+    env = dict(os.environ, CLAUDE_CONFIG_DIR=str(REPO / ".claude"))
+    subprocess.run([str(GRAPHIFY), "install", "--platform", "claude"], check=True, env=env,
+                   stdout=subprocess.DEVNULL)
+    stamp = claude_skill / ".graphify_version"
+    print(f"[graphify] refreshed {claude_skill} (stamp {stamp.read_text().strip() if stamp.exists() else '?'})")
+
+    # Mirror into the agy plugin so the two copies stay byte-identical — the
+    # instruction-stack tests fail otherwise.
+    agy_skill = AGY_PLUGIN_SRC / "skills" / "graphify"
+    if agy_skill.exists():
+        shutil.rmtree(agy_skill)
+    shutil.copytree(claude_skill, agy_skill)
+    print(f"[graphify] mirrored into {agy_skill}")
+    if "agy" in PLATFORMS:
+        ensure_agy_plugin()          # re-registers so agy re-imports the new skill
+
+    print()
+    print("[graphify] next: review `git diff .claude/skills/graphify .antigravity/plugins/graphify`,")
+    print("           run `python3 -m unittest tests.test_instruction_stack`, then in each project")
+    print("           `graphify update .` (graph.json may change shape across versions) and, if the")
+    print("           new version changed its CLAUDE.md section or hooks, `setup-graphify.py <project>`.")
+
+
 # --- per-project registration (additive; preserves existing servers) ------------------
 def _server(trust):
     e = {"command": "bash", "args": ["-c", LAUNCHER]}
@@ -161,6 +220,9 @@ def register_project(project: Path):
 
 def main():
     ensure_global()
+    if "--upgrade" in sys.argv:
+        upgrade()
+        return
     if "agy" in PLATFORMS:
         ensure_agy_plugin()
     positional = [a for a in sys.argv[1:] if not a.startswith("-")]
