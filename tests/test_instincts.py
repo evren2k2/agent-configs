@@ -53,9 +53,9 @@ class QueueCase(unittest.TestCase):
         else:
             os.environ["VAULT_PATH"] = self._prev
 
-    def propose(self, text, origin="user said so", cap=I.CAP):
+    def propose(self, text, origin="user said so", cap=I.CAP, project="demo", scope=None):
         return I.cmd_propose(Args(disposition=text, origin=origin,
-                                  project="demo", cap=cap))
+                                  project=project, cap=cap, scope=scope))
 
     def backdate(self, match, day="2020-01-01"):
         """Pretend the last re-trigger happened in an earlier session."""
@@ -112,9 +112,9 @@ class ProposeTests(QueueCase):
 
     def test_promotion_is_reachable_through_propose_alone(self):
         """End to end: nothing but the hook's own `propose` call is needed."""
-        self.quiet(self.propose, "reachable rule")
+        self.quiet(self.propose, "reachable rule", scope="global")
         self.backdate("reachable rule")
-        self.quiet(self.propose, "reachable rule")
+        self.quiet(self.propose, "reachable rule", scope="global")
         self.quiet(I.cmd_promote, Args(match="reachable", apply=True, force=False))
         self.assertEqual(I.load(), [])
         self.assertIn("reachable rule", self.rules.read_text(encoding="utf-8"))
@@ -143,21 +143,22 @@ class ProposeTests(QueueCase):
 
 
 class PromotionTests(QueueCase):
+    """The GLOBAL path: rules file + agy mirror. Project-scoped routing is in ScopeTests."""
     def test_promotion_below_the_bar_is_refused(self):
-        self.quiet(self.propose, "unearned rule")
+        self.quiet(self.propose, "unearned rule", scope="global")
         with self.assertRaises(SystemExit) as cm:
             self.quiet(I.cmd_promote, Args(match="unearned", apply=False, force=False))
         self.assertIn("seen=1", str(cm.exception))
 
     def test_seen_earns_promotion(self):
-        self.quiet(self.propose, "earned rule")
+        self.quiet(self.propose, "earned rule", scope="global")
         self.backdate("earned rule")
         _, out = self.quiet(I.cmd_seen, Args(match="earned"))
         self.assertIn("seen=2", out)
         self.assertIn("READY", out)
 
     def test_dry_run_writes_nothing(self):
-        self.quiet(self.propose, "dry rule")
+        self.quiet(self.propose, "dry rule", scope="global")
         self.backdate("dry")
         self.quiet(I.cmd_seen, Args(match="dry"))
         _, out = self.quiet(I.cmd_promote, Args(match="dry", apply=False, force=False))
@@ -169,7 +170,7 @@ class PromotionTests(QueueCase):
     def test_promotion_lands_in_BOTH_stacks(self):
         """agentcfg installs rules/ for Claude only, so agy takes the same content as a
         skill. A promotion that reached one stack would be a Claude-only disposition."""
-        self.quiet(self.propose, "cross-stack rule", origin='User: "always do X"')
+        self.quiet(self.propose, "cross-stack rule", origin='User: "always do X"', scope="global")
         self.backdate("cross-stack")
         self.quiet(I.cmd_seen, Args(match="cross-stack"))
         self.quiet(I.cmd_promote, Args(match="cross-stack", apply=True, force=False))
@@ -179,7 +180,7 @@ class PromotionTests(QueueCase):
 
     def test_agy_copy_carries_skill_frontmatter(self):
         """agy loads skills, which must declare name/description to be discoverable."""
-        self.quiet(self.propose, "frontmatter rule")
+        self.quiet(self.propose, "frontmatter rule", scope="global")
         self.backdate("frontmatter")
         self.quiet(I.cmd_seen, Args(match="frontmatter"))
         self.quiet(I.cmd_promote, Args(match="frontmatter", apply=True, force=False))
@@ -190,7 +191,7 @@ class PromotionTests(QueueCase):
 
     def test_both_stacks_stay_in_step_across_promotions(self):
         for n in ("rule alpha", "rule beta"):
-            self.quiet(self.propose, n)
+            self.quiet(self.propose, n, scope="global")
             self.backdate(n)
             self.quiet(I.cmd_seen, Args(match=n))
             self.quiet(I.cmd_promote, Args(match=n, apply=True, force=False))
@@ -201,7 +202,7 @@ class PromotionTests(QueueCase):
             self.assertIn(n, a)
 
     def test_apply_moves_it_out_of_the_queue(self):
-        self.quiet(self.propose, "real rule", origin='User: "do it this way"')
+        self.quiet(self.propose, "real rule", origin='User: "do it this way"', scope="global")
         self.backdate("real rule")
         self.quiet(I.cmd_seen, Args(match="real rule"))
         self.quiet(I.cmd_promote, Args(match="real rule", apply=True, force=False))
@@ -212,7 +213,7 @@ class PromotionTests(QueueCase):
 
     def test_promotion_appends_rather_than_clobbering(self):
         for n in ("first rule", "second rule"):
-            self.quiet(self.propose, n)
+            self.quiet(self.propose, n, scope="global")
             self.backdate(n)
             self.quiet(I.cmd_seen, Args(match=n))
             self.quiet(I.cmd_promote, Args(match=n, apply=True, force=False))
@@ -221,7 +222,7 @@ class PromotionTests(QueueCase):
         self.assertIn("second rule", text)
 
     def test_force_overrides_the_bar(self):
-        self.quiet(self.propose, "forced rule")
+        self.quiet(self.propose, "forced rule", scope="global")
         self.quiet(I.cmd_promote, Args(match="forced", apply=True, force=True))
         self.assertEqual(I.load(), [])
 
@@ -258,6 +259,117 @@ class ExpiryTests(QueueCase):
         I.save(items)
         self.quiet(I.cmd_expire, Args(days=90))
         self.assertEqual(len(I.load()), 1)
+
+
+class ScopeTests(QueueCase):
+    """Projects differ in scope and method; a rule is project working-mode until a
+    second project shows it holds there too. Promotion routes on that call."""
+
+    def test_default_scope_is_project(self):
+        self.quiet(self.propose, "speak plainly")
+        self.assertEqual(I.load()[0]["scope"], "project")
+        self.assertEqual(I.load()[0]["project"], "demo")
+
+    def test_project_scope_requires_a_project(self):
+        with self.assertRaises(SystemExit):
+            self.quiet(self.propose, "speak plainly", project=None)
+
+    def test_global_scope_is_explicit(self):
+        self.quiet(self.propose, "measure before claiming", scope="global")
+        self.assertEqual(I.load()[0]["scope"], "global")
+
+    def test_re_trigger_from_a_second_project_is_recorded_and_flagged(self):
+        self.quiet(self.propose, "speak plainly")
+        self.backdate("speak plainly")
+        _, out = self.quiet(self.propose, "speak plainly", project="other")
+        x = I.load()[0]
+        self.assertEqual(x["also_seen_in"], ["other"])
+        self.assertEqual(x["project"], "demo")            # origin project is kept
+        self.assertIn("promote --scope global", out)
+
+    def test_list_shows_the_scope(self):
+        self.quiet(self.propose, "speak plainly")
+        self.quiet(self.propose, "measure before claiming", scope="global")
+        _, out = self.quiet(I.cmd_list, Args(all=False))
+        self.assertIn("(project:demo)", out)
+        self.assertIn("(global)", out)
+
+    def _ready(self, text, **kw):
+        self.quiet(self.propose, text, **kw)
+        self.backdate(text)
+        self.quiet(self.propose, text, **kw)
+
+    def test_project_promotion_lands_in_the_vault_working_mode_note_not_the_rules(self):
+        self._ready("speak plainly")
+        self.quiet(I.cmd_promote, Args(match="speak plainly", apply=True, force=False, scope=None))
+        wm = self.vault / "projects" / "demo" / "decisions" / "working-mode.md"
+        self.assertTrue(wm.is_file())
+        text = wm.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---\n"), "a vault note needs frontmatter")
+        self.assertIn("type: decision", text)
+        self.assertIn("project: demo", text)
+        self.assertIn("[[demo/working-context]]", text)
+        self.assertIn("- **speak plainly**", text)
+        self.assertFalse(self.rules.exists(), "a project rule must not become global")
+        self.assertFalse(self.agy.exists())
+        self.assertEqual(I.load(), [])
+
+    def test_global_promotion_lands_in_both_stacks(self):
+        self._ready("measure before claiming", scope="global")
+        self.quiet(I.cmd_promote, Args(match="measure", apply=True, force=False, scope=None))
+        self.assertIn("measure before claiming", self.rules.read_text(encoding="utf-8"))
+        self.assertIn("measure before claiming", self.agy.read_text(encoding="utf-8"))
+        self.assertFalse((self.vault / "projects").exists())
+
+    def test_scope_can_be_overridden_at_promotion(self):
+        self._ready("speak plainly")                         # queued as project
+        self.quiet(I.cmd_promote, Args(match="speak plainly", apply=True, force=False, scope="global"))
+        self.assertIn("speak plainly", self.rules.read_text(encoding="utf-8"))
+        self.assertFalse((self.vault / "projects" / "demo" / "decisions" / "working-mode.md").exists())
+
+    def test_project_promotion_appends_to_an_existing_working_mode_note(self):
+        self._ready("speak plainly")
+        self.quiet(I.cmd_promote, Args(match="speak plainly", apply=True, force=False, scope=None))
+        self._ready("show your evidence")
+        self.quiet(I.cmd_promote, Args(match="evidence", apply=True, force=False, scope=None))
+        text = (self.vault / "projects" / "demo" / "decisions" / "working-mode.md").read_text(encoding="utf-8")
+        self.assertEqual(text.count("---\ndate:"), 1, "frontmatter must not be duplicated")
+        self.assertLess(text.index("speak plainly"), text.index("show your evidence"))
+
+    def test_dry_run_names_the_working_mode_target(self):
+        self._ready("speak plainly")
+        _, out = self.quiet(I.cmd_promote, Args(match="speak plainly", apply=False, force=False, scope=None))
+        self.assertIn("working-mode", out)
+        self.assertFalse((self.vault / "projects").exists())
+
+
+class PendingTests(QueueCase):
+    """The session-start hook prints `pending`; it must be silent on the normal path
+    and name the decision the user has to make otherwise."""
+
+    def test_silent_when_nothing_is_ready_and_the_queue_has_room(self):
+        self.quiet(self.propose, "speak plainly")
+        _, out = self.quiet(I.cmd_pending, Args())
+        self.assertEqual(out, "")
+
+    def test_ready_entries_are_named_with_their_scope(self):
+        self.quiet(self.propose, "speak plainly")
+        self.backdate("speak plainly")
+        self.quiet(self.propose, "speak plainly", project="other")
+        _, out = self.quiet(I.cmd_pending, Args())
+        self.assertIn("READY", out)
+        self.assertIn("project:demo", out)
+        self.assertIn("also seen in other", out)
+        self.assertIn("ask the user", out)
+
+    def test_near_cap_is_flagged_before_propose_starts_refusing(self):
+        for n in range(I.CAP - 1):
+            self.quiet(self.propose, f"rule {n}")
+        _, out = self.quiet(I.cmd_pending, Args())
+        self.assertIn(f"{I.CAP - 1}/{I.CAP}", out)
+        self.quiet(self.propose, "last rule")
+        _, out = self.quiet(I.cmd_pending, Args())
+        self.assertIn("will be refused", out)
 
 
 if __name__ == "__main__":

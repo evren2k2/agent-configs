@@ -83,6 +83,7 @@ Small, stable, and the difference between an agent acting correctly and acting p
 |---|---|---|
 | **Direction** | what we are doing, what we chose to leave out, and what we are not free to change | `projects/<p>/decisions/` |
 | **Vocabulary** | what this project's terms mean *here* | `projects/<p>/vocabulary.md` (optional) |
+| **Working mode** | how this project is run: the agent's role, tools on/off, how decisions are made — promoted project-scoped dispositions; printed by the SessionStart hook and binding over generic hook lines | `projects/<p>/decisions/working-mode.md` (written by `instincts.py promote`, never by hand) |
 
 Direction covers two kinds of statement, and the difference is worth keeping visible even
 though both are direction. A **choice** is ours and can be revisited — *"the x/y edge case is

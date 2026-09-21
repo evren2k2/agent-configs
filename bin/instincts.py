@@ -38,11 +38,26 @@ WHY A SCRIPT AND NOT A PROSE RULE
     and changes nothing until `--apply`, because a rule that shapes every future session
     is a direction-class write under the vault policy and belongs to the user.
 
+SCOPE — PROJECT BY DEFAULT
+    Projects differ in scope and method, so a rule learned on one is not presumed to
+    hold on another. Every disposition carries `scope: project` (the default) or
+    `scope: global`, and promotion routes on it:
+      * project -> the vault's projects/<p>/decisions/working-mode.md, which the
+        SessionStart hook prints whenever that project is the CWD. This is the same
+        content as the "working mode" rulings that used to live only in a checkpoint
+        ledger — and were lost when one checkpoint failed to carry the ledger forward.
+      * global  -> .claude/rules/learned-dispositions.md (+ the agy mirror), loaded
+        in every session of every project.
+    The signal that a rule is global is the same re-trigger evidence promotion already
+    asks for: the identical rule proposed from a SECOND project. `propose` records the
+    extra project and says so; `promote --scope global` makes the call, with approval.
+
 USAGE
-    instincts.py propose --disposition TEXT --origin TEXT [--project P]
+    instincts.py propose --disposition TEXT --origin TEXT --project P [--scope project|global]
     instincts.py list [--all]
+    instincts.py pending                    # hook-friendly: READY / near-cap lines, else silent
     instincts.py seen --match TEXT [--origin TEXT]   # re-triggered; earns promotion
-    instincts.py promote --match TEXT [--apply]
+    instincts.py promote --match TEXT [--apply] [--scope project|global]
     instincts.py expire                     # drop stale never-re-triggered proposals
 """
 from __future__ import annotations
@@ -73,7 +88,13 @@ RULES_FILE = BIN_DIR.parent / ".claude/rules/learned-dispositions.md"
 AGY_SKILL = (BIN_DIR.parent /
              ".antigravity/plugins/general/skills/learned-dispositions/SKILL.md")
 
-FIELDS = ("disposition", "origin", "date", "project", "seen", "last_seen")
+FIELDS = ("disposition", "origin", "date", "project", "scope", "seen", "last_seen")
+SCOPES = ("project", "global")
+
+
+def working_mode_path(project: str) -> Path:
+    """Where a PROJECT-scoped disposition lands: the project's direction set."""
+    return vault_root() / "projects" / project / "decisions" / "working-mode.md"
 
 
 def bump(entry: dict, origin: str = "") -> bool:
@@ -110,9 +131,11 @@ HEADER = """\
 # Knowledge ("the X test validates Y", "this edge case comes from A/B interaction") goes
 # to a vault project note instead; it is retrieved on demand and does not belong here.
 #
-# Entries are proposals. They are promoted into .claude/rules/learned-dispositions.md --
-# which every session loads -- only after re-triggering in a later session, and only with
-# the user's approval. Managed by bin/instincts.py; the cap is enforced, not requested.
+# Entries are proposals, scoped `project` (default) or `global`. Promotion -- only after
+# re-triggering in a later session, and only with the user's approval -- routes on scope:
+# project -> projects/<p>/decisions/working-mode.md (printed at session start for that
+# project); global -> .claude/rules/learned-dispositions.md (every session, every project).
+# Managed by bin/instincts.py; the cap is enforced, not requested.
 """
 
 
@@ -141,9 +164,24 @@ def cmd_propose(args) -> int:
     items = load()
 
     text = args.disposition.strip()
+    scope = getattr(args, "scope", None) or "project"
+    if scope not in SCOPES:
+        sys.exit(f"instincts: --scope must be one of {SCOPES}")
+    if scope == "project" and not args.project:
+        sys.exit("instincts: a project-scoped disposition needs --project <p> "
+                 "(or say --scope global if it truly holds everywhere)")
     for x in items:
         if x["disposition"].strip().lower() != text.lower():
             continue
+        # The same rule arriving from a DIFFERENT project is the evidence that it is
+        # not project working-mode but a global disposition. Record it; the promotion
+        # (and the scope call) stays with the user.
+        if args.project and args.project != x.get("project"):
+            also = x.setdefault("also_seen_in", [])
+            if args.project not in also:
+                also.append(args.project)
+            print(f"re-triggered in a second project ({x.get('project')} -> {args.project}); "
+                  f"candidate for `promote --scope global`")
         # A duplicate is not noise — it is the evidence promotion asks for. The hook
         # tells every session to propose what it was corrected on; a LATER session
         # independently arriving at the same rule is exactly "this recurs". Treating
@@ -178,11 +216,12 @@ def cmd_propose(args) -> int:
         "origin": args.origin.strip(),
         "date": today,
         "project": args.project or "global",
+        "scope": scope,
         "seen": 1,
         "last_seen": today,
     })
     save(items)
-    print(f"queued ({len(items)}/{args.cap}): {text[:70]}")
+    print(f"queued ({len(items)}/{args.cap}, scope={scope}): {text[:70]}")
     print(f"promotes after re-triggering in {PROMOTE_AT - 1} more session(s)")
     return 0
 
@@ -195,11 +234,40 @@ def cmd_list(args) -> int:
     print(f"{len(items)}/{CAP} queued\n")
     for x in sorted(items, key=lambda x: -x.get("seen", 0)):
         ready = "READY" if x.get("seen", 0) >= PROMOTE_AT else "     "
-        print(f"  [{ready}] seen={x.get('seen', 0)} {x.get('date', '?')} "
-              f"({x.get('project', '?')})")
+        where = "global" if x.get("scope") == "global" else f"project:{x.get('project', '?')}"
+        extra = f" +{','.join(x['also_seen_in'])}" if x.get("also_seen_in") else ""
+        print(f"  [{ready}] seen={x.get('seen', 0)} {x.get('date', '?')} ({where}{extra})")
         print(f"          {x['disposition']}")
         if args.all:
             print(f"          origin: {x.get('origin', '')[:140]}")
+    return 0
+
+
+def cmd_pending(args) -> int:
+    """What the user needs to decide, or nothing.
+
+    Promotion is the user's call, but the only place READY ever showed was the
+    `propose` output in the turn it happened — if the agent did not ask right then,
+    nothing reminded anyone. The SessionStart hook prints this so a pending decision
+    is raised at the start of the next session rather than forgotten. Silent when
+    there is nothing to say, so it costs no tokens on the normal path.
+    """
+    items = load()
+    ready = [x for x in items if x.get("seen", 0) >= PROMOTE_AT]
+    lines = []
+    for x in ready:
+        where = "global" if x.get("scope") == "global" else f"project:{x.get('project', '?')}"
+        extra = f"; also seen in {','.join(x['also_seen_in'])} -> consider --scope global" \
+            if x.get("also_seen_in") else ""
+        lines.append(f"  READY (seen={x['seen']}, {where}{extra}): {x['disposition'][:90]}")
+    if lines:
+        print(f"DISPOSITIONS READY TO PROMOTE — ask the user before acting; promotion is their "
+              f"call (`instincts.py promote --match <text> --apply`):")
+        print("\n".join(lines))
+    if len(items) >= CAP - 1:
+        print(f"DISPOSITION QUEUE {len(items)}/{CAP}: the next `propose` "
+              f"{'will be refused' if len(items) >= CAP else 'fills it'} — ask the user which "
+              f"entries to promote or expire (`instincts.py list`).")
     return 0
 
 
@@ -240,12 +308,38 @@ AGY_HEADER = (
 )
 
 
+# A project-scoped promotion lands in the vault, so it is a note: frontmatter and a
+# wikilink are required by the vault rules. `type: decision` because working mode is
+# direction — the user's rulings on HOW this project is run — not implementation.
+WORKING_MODE_HEADER = """\
+---
+date: {{today}}
+tags: [{project}, working-mode, direction, disposition]
+type: decision
+status: active
+project: {project}
+---
+
+# {project} — Working mode
+
+How this project is run: the user's standing rulings on the agent's role, tooling
+and process. Each entry was a correction made in a session, promoted out of the
+`agent/instincts.yaml` queue by `bin/instincts.py` after recurring, and approved by
+the user. The SessionStart hook prints these whenever this project is the CWD, so
+they bind before the first action — independently of the [[{project}/working-context]]
+checkpoint ledger, which carries the same rulings verbatim but can be lost.
+
+Treat every line as binding unless the user has since said otherwise.
+"""
+
+
 def _append(path: Path, header: str, block: str) -> None:
     if path.exists():
         text = path.read_text(encoding="utf-8").rstrip("\n") + "\n"
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-        text = header.format(promote_at=PROMOTE_AT)
+        text = header.replace("{promote_at}", str(PROMOTE_AT)) \
+                     .replace("{today}", datetime.date.today().isoformat())
     _atomic_write_text(path, text + "\n" + block)
 
 
@@ -259,24 +353,42 @@ def cmd_promote(args) -> int:
                  f"earns always-on status by recurring, which is exactly what the "
                  f"retired instincts never did. Use --force to override.")
 
+    scope = getattr(args, "scope", None) or x.get("scope") or "project"
+    if scope not in SCOPES:
+        sys.exit(f"instincts: --scope must be one of {SCOPES}")
+    project = x.get("project") or ""
+    if scope == "project" and (not project or project == "global"):
+        sys.exit("instincts: this entry has no project; promote it with --scope global "
+                 "or fix its `project:` field first")
+
     block = (f"- **{x['disposition']}**\n"
              f"  <sub>seen {x.get('seen', 1)}x since {x.get('date', '?')} "
-             f"({x.get('project', '?')}); {x.get('origin', '')}</sub>\n")
+             f"({project or '?'}); {x.get('origin', '')}</sub>\n")
+
+    if scope == "global":
+        targets = [(RULES_FILE, RULES_HEADER), (AGY_SKILL, AGY_HEADER)]
+        where = "BOTH stacks (every session, every project)"
+    else:
+        targets = [(working_mode_path(project), WORKING_MODE_HEADER.format(project=project))]
+        where = f"the {project} working-mode note (printed at session start for that project)"
 
     if not args.apply:
-        print(f"would append to BOTH stacks:\n  {RULES_FILE}\n  {AGY_SKILL}\n")
+        print(f"would append to {where}:")
+        for path, _ in targets:
+            print(f"  {path}")
+        print()
         print(block)
         print("nothing written. re-run with --apply once the user has approved — these "
-              "files are loaded into every session.")
+              "files are loaded into future sessions.")
         return 0
 
-    _append(RULES_FILE, RULES_HEADER, block)
-    _append(AGY_SKILL, AGY_HEADER, block)
+    for path, header in targets:
+        _append(path, header, block)
 
     del items[i]
     save(items)
-    print(f"promoted -> {RULES_FILE}")
-    print(f"         -> {AGY_SKILL}")
+    for path, _ in targets:
+        print(f"promoted -> {path}")
     print(f"queue now {len(items)}/{CAP}")
     return 0
 
@@ -306,13 +418,18 @@ def main() -> int:
     p.add_argument("--disposition", required=True, help="the rule, imperative, one line")
     p.add_argument("--origin", required=True,
                    help="what produced it — quote the user's correction verbatim")
-    p.add_argument("--project")
+    p.add_argument("--project", help="where the correction happened (required for scope=project)")
+    p.add_argument("--scope", choices=SCOPES, default="project",
+                   help="project (default): binds only on that project; global: every session")
     p.add_argument("--cap", type=int, default=CAP)
     p.set_defaults(fn=cmd_propose)
 
     p = sub.add_parser("list", help="show the queue")
     p.add_argument("--all", action="store_true", help="include origins")
     p.set_defaults(fn=cmd_list)
+
+    p = sub.add_parser("pending", help="READY / near-cap lines for the session-start hook; silent otherwise")
+    p.set_defaults(fn=cmd_pending)
 
     p = sub.add_parser("seen", help="mark re-triggered in this session")
     p.add_argument("--match", required=True)
@@ -323,6 +440,8 @@ def main() -> int:
     p.add_argument("--match", required=True)
     p.add_argument("--apply", action="store_true", help="actually write (user approved)")
     p.add_argument("--force", action="store_true", help="promote below the seen bar")
+    p.add_argument("--scope", choices=SCOPES, default=None,
+                   help="override the queued scope at promotion time")
     p.set_defaults(fn=cmd_promote)
 
     p = sub.add_parser("expire", help="drop stale proposals that never re-triggered")

@@ -42,10 +42,25 @@ if [ -n "$MATCHED_PROJECT" ]; then
     if [ -f "$VAULT/projects/$MATCHED_PROJECT/working-context.md" ]; then
         echo "Last session: mcp__vault-mcp__vault_checkpoint(project=\"$MATCHED_PROJECT\") reads the last checkpoint verbatim"
         echo "              (fallback: python3 ~/.agent-configs/bin/checkpoint.py read --project $MATCHED_PROJECT)."
+        echo "              Write checkpoints ONLY with \`checkpoint.py write\` — never append to working-context.md by hand."
+    fi
+    # Project working mode: the user's standing rulings on how THIS project is run
+    # (agent role, tooling, process). Promoted project-scoped dispositions live here.
+    # Printed verbatim because they must bind before the first action, and because on
+    # 2026-09-21 the same rulings were lost when a checkpoint dropped its ledger.
+    WM="$VAULT/projects/$MATCHED_PROJECT/decisions/working-mode.md"
+    if [ -f "$WM" ]; then
+        echo "WORKING MODE — binding for $MATCHED_PROJECT (projects/$MATCHED_PROJECT/decisions/working-mode.md; overrides generic hook lines below):"
+        grep '^- ' "$WM" | head -25
     fi
 else
     echo "Action: Use vault_find or vault_project to locate project context."
 fi
+
+# --- Dispositions awaiting the user's decision (silent when there are none) ---
+# READY used to be visible only in the `propose` output of the turn it happened; if the
+# agent did not ask then, nothing reminded anyone. Surface it at the start of every session.
+timeout 5 python3 "$HOME/.agent-configs/bin/instincts.py" pending 2>/dev/null
 
 # --- Santa Method (surfaced only when a reviewer backend is configured) ---
 # Gitignored, machine-local config (copied from the tracked santa-method.json.example).

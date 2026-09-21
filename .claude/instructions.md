@@ -48,6 +48,7 @@ Before writing ANY note to the vault, verify:
 **Quick capture:** Drop in `inbox/`, process later.
 **Decision record:** Use `type: decision`. Include the decision, alternatives considered, rationale, and who decided. Requires user-approved direction before writing.
 **Session summary:** Use structured template (see obsidian-notes skill).
+**Checkpoint:** write ONLY by piping the entry to `python3 ~/.agent-configs/bin/checkpoint.py write --project <p>` (the `checkpoint` skill has the template). Never `cat >>`, Edit, or patch `working-context.md` directly: the script carries the verbatim User Intent ledger forward, inserts the record separator and updates the timeline; a hand-written entry does none of that and the next session loses the intent. Read with `mcp__vault-mcp__vault_checkpoint` — it flags a dropped ledger and prints the missing items.
 
 ## Git Commits
 
@@ -65,15 +66,17 @@ Two different things get learned in a session. They are stored differently becau
 These live in `~/obsidian_notes/agent/instincts.yaml`, a capped **staging queue** managed by `bin/instincts.py`:
 
 ```bash
-python3 ~/.agent-configs/bin/instincts.py propose --disposition '<rule>' --origin '<verbatim user correction>' --project <p>
+python3 ~/.agent-configs/bin/instincts.py propose --disposition '<rule>' --origin '<verbatim user correction>' --project <p> [--scope global]
 python3 ~/.agent-configs/bin/instincts.py list
 ```
 
 The source of a disposition is a **user correction** — a moment your scope, your rigor, an assumption, or an unmeasured claim had to be fixed — not a retrospective on what the task taught. Asking "what did I learn?" reliably returns knowledge; asking "where was I corrected?" is what surfaces a disposition.
 
-The test: if the rule stops being true when you switch projects, it is knowledge. Write the note instead.
+The test: if it says what is *true about a system*, it is knowledge — write the note. If it says *how to work*, it is a disposition.
 
-Queued dispositions do nothing until promoted into `rules/learned-dispositions.md`, which every session loads. Promotion requires the disposition to have re-triggered in a later session *and* the user's approval — it is a direction-class write. Never edit that rules file by hand; use `instincts.py promote --apply`.
+**Scope.** Projects differ in method, so a disposition is **project-scoped by default** (`--project <p>`, `scope: project`): it says how *this* project is run — the agent's role, which tools are on or off, how decisions are made. Pass `--scope global` only when the rule plainly holds on any project (*"never state an unmeasured estimate"*). The evidence that a project rule is really global is the same rule being proposed from a second project; `propose` records that and says so.
+
+Queued dispositions do nothing until promoted, and promotion routes on scope: project → `projects/<p>/decisions/working-mode.md` in the vault, which the SessionStart hook prints whenever that project is the CWD and which **overrides any generic hook line** (e.g. the santa nudge) for that project; global → `rules/learned-dispositions.md`, loaded in every session. Promotion requires the disposition to have re-triggered in a later session *and* the user's approval — it is a direction-class write. Never edit those files by hand; use `instincts.py promote --apply` (`--scope` overrides at promotion time).
 
 Propose a disposition even when you suspect it is already queued: an identical rule proposed in a later session is counted as the re-trigger that earns promotion (a same-day repeat is not), so `propose` alone closes the loop.
 # graphify
