@@ -312,7 +312,9 @@ class IntentCarryTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         vault = Path(tmp.name)
         (vault / "projects" / "demo").mkdir(parents=True)
+        prev_root = cp.vault_root
         cp.vault_root = lambda: vault
+        self.addCleanup(setattr, cp, "vault_root", prev_root)   # leaked into later tests
 
         def write(body, keep=2):
             class A:
@@ -334,6 +336,105 @@ class IntentCarryTests(unittest.TestCase):
         _, entries = cp.split_document(text)
         self.assertEqual(len(entries), 2)              # first entry was trimmed away
         self.assertIn('1. "the original ask"', entries[-1])   # intent still present
+
+
+class LedgerGapTests(unittest.TestCase):
+    """The 2026-09-20/21 failure: three checkpoints appended by hand (no
+    `checkpoint.py write`), each replacing the ledger with "items 1–48 are in the
+    earlier checkpoint". The next session read n=1 and lost every binding item."""
+
+    MORNING = ('## Checkpoint — 2026-09-20 (morning)\n\n### User Intent\n'
+               '1. "opus subagents write their own verification, no santa"\n'
+               '2. "you are the manager"\n\n### Current Goal\nship\n')
+    NOON = ('## Checkpoint — 2026-09-20 12:30\n\n'
+            '### User Intent (ledger continues from item 2 of the morning checkpoint)\n'
+            '3. "the outline is not the hard truth; I am"\n\n### Current Goal\nstill ship\n')
+    NIGHT = ('## Checkpoint — 2026-09-21 04:45\n\n'
+             '### User Intent — verbatim ledger (items 1–3 in earlier checkpoints)\n'
+             '4. "update the checkpoint"\n\n### Current Goal\nnew session\n')
+
+    def test_intact_chain_has_no_gap(self):
+        carried = cp.carry_intent(self.NOON, [self.MORNING])
+        self.assertEqual(cp.ledger_gap([self.MORNING, carried]), "")
+
+    def test_pointer_ledger_is_a_gap(self):
+        gap = cp.ledger_gap([self.MORNING, self.NOON])
+        self.assertIn('"you are the manager"', gap)
+        self.assertNotIn("hard truth", gap)          # the newest entry's own items stay put
+
+    def test_gap_walks_the_whole_chain_oldest_first(self):
+        gap = cp.ledger_gap([self.MORNING, self.NOON, self.NIGHT])
+        self.assertLess(gap.index("manager"), gap.index("hard truth"))
+        self.assertNotIn("update the checkpoint", gap)
+
+    def test_render_read_appends_the_dropped_ledger_on_n_1(self):
+        out = cp.render_read(Path("x"), [self.MORNING, self.NOON, self.NIGHT], 1)
+        self.assertIn("LEDGER GAP", out)
+        self.assertIn("no santa", out)
+        self.assertLess(out.index("update the checkpoint"), out.index("LEDGER GAP"))
+
+    def test_render_read_is_quiet_when_the_ledger_was_carried(self):
+        carried = cp.carry_intent(self.NOON, [self.MORNING])
+        out = cp.render_read(Path("x"), [self.MORNING, carried], 1)
+        self.assertNotIn("LEDGER GAP", out)
+
+
+class RepairTests(unittest.TestCase):
+    """`repair` must turn a hand-appended file into what `write` would have produced."""
+
+    def _hand_appended(self):
+        # what `cat >> working-context.md <<EOF` leaves behind: a header with a bare
+        # markdown rule above it and no ---CHECKPOINT--- separator
+        return (PREAMBLE + f"\n{cp.SEP}\n" + LedgerGapTests.MORNING +
+                "\n\n---\n\n" + LedgerGapTests.NOON + "\n\n" + LedgerGapTests.NIGHT)
+
+    def test_headers_without_separators_become_records(self):
+        fixed, notes = cp.repair_document(self._hand_appended())
+        _, entries = cp.split_document(fixed)
+        self.assertEqual(len(entries), 3)
+        self.assertEqual(sum("separator inserted" in n for n in notes), 2)
+        self.assertNotIn("\n---\n\n---CHECKPOINT---", fixed)    # stray HR removed
+
+    def test_repair_splices_the_dropped_ledger_into_the_newest_entry(self):
+        fixed, notes = cp.repair_document(self._hand_appended())
+        _, entries = cp.split_document(fixed)
+        self.assertIn('"you are the manager"', entries[-1])
+        self.assertIn("hard truth", entries[-1])
+        self.assertLess(entries[-1].index("manager"), entries[-1].index("update the checkpoint"))
+        self.assertEqual(cp.ledger_gap(entries), "")
+
+    def test_repair_is_idempotent_and_silent_on_a_sound_file(self):
+        fixed, _ = cp.repair_document(self._hand_appended())
+        again, notes = cp.repair_document(fixed)
+        self.assertEqual(again, fixed)
+        self.assertEqual(notes, [])
+
+    def test_repair_leaves_the_preamble_alone(self):
+        fixed, _ = cp.repair_document(self._hand_appended())
+        self.assertTrue(fixed.startswith(PREAMBLE.rstrip()))
+
+    def test_cmd_repair_writes_timeline_and_trims(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        vault = Path(tmp.name); (vault / "projects" / "demo").mkdir(parents=True)
+        prev = cp.vault_root; cp.vault_root = lambda: vault
+        self.addCleanup(setattr, cp, "vault_root", prev)
+        ctx = vault / "projects" / "demo" / "working-context.md"
+        ctx.write_text(self._hand_appended(), encoding="utf-8")
+
+        class A:
+            project, keep, no_timeline = "demo", 2, False
+        from io import StringIO
+        out, sys.stdout = sys.stdout, StringIO()
+        try:
+            cp.cmd_repair(A)
+        finally:
+            sys.stdout = out
+        _, entries = cp.split_document(ctx.read_text(encoding="utf-8"))
+        self.assertEqual(len(entries), 2)                  # trimmed to keep=2
+        self.assertIn("manager", entries[-1])              # ledger survived the trim
+        tl = (vault / "projects" / "demo" / "timeline.md").read_text(encoding="utf-8")
+        self.assertIn("2026-09-20 (morning)", tl)          # the dropped entry reached the timeline
+        self.assertIn("2026-09-21 04:45", tl)
 
 
 if __name__ == "__main__":

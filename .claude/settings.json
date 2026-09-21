@@ -99,6 +99,17 @@
             "statusMessage": "Updating timeline..."
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.agent-configs/hooks/repair-checkpoint.sh",
+            "timeout": 10,
+            "statusMessage": "Checking checkpoint integrity..."
+          }
+        ]
       }
     ]
   }

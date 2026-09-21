@@ -95,6 +95,16 @@ Anything unresolved, waiting on the user, or stuck. "None" if clear.
 EOF
 ```
 
+**Do not** append with `cat >>`, a heredoc, `Edit`, or an in-place patch. That is how
+the 2026-09-20/21 checkpoints lost the ledger: three entries were appended by hand,
+each with "items 1–48 are in the earlier checkpoint" where the ledger should have been,
+and the next session — which reads only the newest entry — acted without them. A
+hand-written entry also lacks the `---CHECKPOINT---` separator, so the parser folds it
+into the previous record. If it happens anyway, `checkpoint.py repair --project <p>`
+inserts the separators and splices the dropped ledger back; the PostToolUse hook on the
+shell tool runs it automatically, and `vault_checkpoint` prints a **LEDGER GAP** banner
+with the missing items until the file is repaired.
+
 **Do not** read the file first, append with Edit, then re-read and rewrite to trim.
 That is four full-context round trips for work that needs no model decision between
 the steps: the body is already written, "keep the last 5" is a fixed rule, and the
@@ -181,7 +191,8 @@ folder and conformant frontmatter are created if absent.
 ## How the pieces fit
 
 `bin/checkpoint.py` owns the `---CHECKPOINT---` format — parsing, trimming, the intent
-carry-forward, and the 2-line timeline digest — and is the only implementation of it.
+carry-forward, the ledger-gap check on read, `repair`, and the 2-line timeline digest —
+and is the only implementation of it.
 `hooks/update-timeline.sh` calls it so checkpoints still written with the Write/Edit
 tools also reach the timeline; `vault_checkpoint` calls it to read.
 

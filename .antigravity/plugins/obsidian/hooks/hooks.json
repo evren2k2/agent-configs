@@ -50,6 +50,26 @@
           "timeout": 5000
         }
       ]
+    },
+    {
+      "matcher": "run_shell_command",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash ~/.agent-configs/hooks/repair-checkpoint.sh",
+          "timeout": 10000
+        }
+      ]
+    },
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash ~/.agent-configs/hooks/repair-checkpoint.sh",
+          "timeout": 10000
+        }
+      ]
     }
   ],
   "Stop": [

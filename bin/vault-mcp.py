@@ -310,10 +310,9 @@ class VaultMCPServer:
             return {"content": [{"type": "text",
                                  "text": f"{len(entries)} checkpoint(s) in {ctx}:\n{body}"}]}
 
-        picked = entries[-n:] if n and n > 0 else entries
-        header = (f"{ctx} — {len(picked)} of {len(entries)} checkpoint(s), newest last")
+        # One renderer for the CLI and the tool: the ledger-gap defence lives there.
         return {"content": [{"type": "text",
-                             "text": header + "\n\n" + f"\n\n{cp.SEP}\n\n".join(picked)}]}
+                             "text": cp.render_read(ctx, entries, n if n else 0)}]}
 
     def _ensure_semantic(self, idx):
         """Load the embedding model + vector store once per process. Returns

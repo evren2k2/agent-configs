@@ -26,7 +26,8 @@ DOCUMENT SHAPE
 
 USAGE
     checkpoint.py write  --project NAME [--keep 5] [--no-timeline]   # body on stdin
-    checkpoint.py read   --project NAME [-n 1] [--headers]
+    checkpoint.py read   --project NAME [-n 1] [--headers]   # flags a dropped ledger
+    checkpoint.py repair --project NAME                       # hand-edited file -> sound
     checkpoint.py list
     checkpoint.py timeline --file PATH        # snapshot PATH's last entry (hook path)
 """
@@ -154,6 +155,100 @@ def carry_intent(body: str, entries: list[str]) -> str:
     if nxt:
         return body[:nxt.start()] + block + body[nxt.start():]
     return body.rstrip() + "\n\n" + block.rstrip() + "\n"
+
+
+def ledger_gap(entries: list[str]) -> str:
+    """Prior ledger items the newest entry failed to carry. '' when intact.
+
+    A checkpoint appended by hand (a heredoc, an in-place patch) never passes
+    through carry_intent(), so its ledger is whatever the writer typed — in the
+    observed failure a one-line pointer to "items 1–48 in the earlier checkpoint".
+    The next session reads only the newest entry and never follows the pointer.
+    This walks the older entries and returns every ledger that is neither in the
+    newest entry nor already covered by a later one, oldest first, so a reader can
+    print the intent the writer dropped and a repair can splice it back in.
+    """
+    if len(entries) < 2:
+        return ""
+    newest = intent_body(entries[-1])
+    missing: list[str] = []
+    acc = newest
+    for e in reversed(entries[:-1]):
+        prior = intent_body(e)
+        if prior and prior not in acc:
+            missing.append(prior)
+            acc += "\n" + prior
+    return "\n".join(reversed(missing))
+
+
+GAP_BANNER = ("LEDGER GAP — the newest checkpoint did not carry the User Intent ledger "
+              "forward (it was written without `checkpoint.py write`). The dropped items, "
+              "recovered from earlier checkpoints, follow and are still binding. "
+              "`checkpoint.py repair --project <p>` splices them back into the file.")
+
+
+def render_read(ctx: Path, entries: list[str], n: int) -> str:
+    """The text both `checkpoint.py read` and the vault_checkpoint MCP tool return.
+
+    One renderer, so a defence added here protects every reader. Appends the
+    dropped ledger when the newest entry lost it — the default n=1 read is exactly
+    the case where a pointer-only ledger would otherwise pass unnoticed.
+    """
+    picked = entries[-n:] if n > 0 else entries
+    out = [f"# {ctx}  ({len(picked)} of {len(entries)} checkpoints, newest last)\n",
+           f"\n\n{SEP}\n\n".join(picked)]
+    gap = ledger_gap(entries)
+    if gap:
+        out.append(f"\n\n{'=' * 8} {GAP_BANNER}\n\n{INTENT_HEADING} (recovered)\n{gap}")
+    return "\n".join(out)
+
+
+# ------------------------------------------------------------------ repair
+_HEADER_RE = re.compile(r"^##\s*Checkpoint\b")
+
+
+def repair_document(text: str) -> tuple[str, list[str]]:
+    """Make a hand-edited working-context parse and carry the way `write` would.
+
+    Two defects, both from appending to the file instead of piping to `write`:
+      * a `## Checkpoint` header with no `---CHECKPOINT---` line above it — the
+        parser folds it into the previous record under a stale title;
+      * a newest entry whose ledger dropped items the earlier entries hold.
+    Returns (repaired_text, notes); notes is empty when nothing needed doing.
+    """
+    notes: list[str] = []
+    lines = text.split("\n")
+    out: list[str] = []
+    for line in lines:
+        if _HEADER_RE.match(line):
+            j = len(out)
+            while j > 0 and out[j - 1].strip() in ("", "---"):
+                j -= 1
+            has_sep = j > 0 and SEP_RE.match(out[j - 1]) is not None
+            if not has_sep:
+                del out[j:]                      # stray blank / markdown-HR padding
+                out += ["", SEP]
+                notes.append(f"separator inserted before: {line.strip()[:70]}")
+        out.append(line)
+    text = "\n".join(out)
+
+    preamble, entries = split_document(text)
+    if entries:
+        gap = ledger_gap(entries)
+        if gap:
+            newest = entries[-1]
+            m = _INTENT_RE.search(newest)
+            if m:
+                newest = newest[:m.end()] + gap + "\n" + newest[m.end():]
+            else:
+                nxt = re.search(r"(?m)^###\s", newest)
+                block = f"{INTENT_HEADING}\n{gap}\n\n"
+                newest = (newest[:nxt.start()] + block + newest[nxt.start():]) if nxt \
+                    else newest.rstrip() + "\n\n" + block.rstrip() + "\n"
+            entries[-1] = newest
+            notes.append(f"ledger carried into: {entry_header(newest)[:70]}")
+        text = join_document(preamble, entries)
+    return text, notes
 
 
 # ------------------------------------------------------------------ timeline digest
@@ -351,8 +446,7 @@ def cmd_read(args) -> int:
             print(entry_header(e))
         return 0
 
-    print(f"# {ctx}  ({len(picked)} of {len(entries)} checkpoints, newest last)\n")
-    print(f"\n\n{SEP}\n\n".join(picked))
+    print(render_read(ctx, entries, args.n))
     return 0
 
 
@@ -383,6 +477,41 @@ def cmd_timeline(args) -> int:
     return 0
 
 
+def cmd_repair(args) -> int:
+    """Fix a working-context edited by hand: separators, dropped ledger, timeline, trim.
+
+    Wired to the PostToolUse hook on Bash so a `cat >>` or in-place patch of
+    working-context.md is normalised immediately, without the agent knowing to.
+    Prints one line per fix; silent (exit 0) when the file was already sound.
+    """
+    ctx = context_path(vault_root(), args.project)
+    if not ctx.exists():
+        return 0
+    text = ctx.read_text(encoding="utf-8")
+    fixed, notes = repair_document(text)
+    preamble, entries = split_document(fixed)
+
+    if entries and not args.no_timeline:
+        tl = timeline_path(ctx)
+        seen = tl.read_text(encoding="utf-8") if tl.exists() else ""
+        for e in entries:
+            h = entry_header(e)
+            if h != "(no header)" and h not in seen:
+                append_timeline(ctx, e)
+                notes.append(f"timeline snapshot added: {h[:70]}")
+    dropped = max(0, len(entries) - args.keep)
+    if dropped:
+        entries = entries[-args.keep:]
+        notes.append(f"trimmed {dropped} oldest entr{'y' if dropped == 1 else 'ies'} (keep {args.keep})")
+        fixed = join_document(preamble, entries)
+
+    if fixed != text:
+        _atomic_write_text(ctx, fixed)
+    for n in notes:
+        print(f"checkpoint repair: {n}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="checkpoint", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -404,6 +533,13 @@ def main() -> int:
 
     l = sub.add_parser("list", help="one line per checkpoint across all projects")
     l.set_defaults(fn=cmd_list)
+
+    rp = sub.add_parser("repair", help="normalise a hand-edited working-context "
+                        "(separators, dropped ledger, timeline, trim)")
+    rp.add_argument("--project")
+    rp.add_argument("--keep", type=int, default=DEFAULT_KEEP)
+    rp.add_argument("--no-timeline", action="store_true")
+    rp.set_defaults(fn=cmd_repair)
 
     t = sub.add_parser("timeline", help="snapshot a written file's last entry")
     t.add_argument("--file", required=True)
