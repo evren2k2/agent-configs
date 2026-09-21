@@ -316,14 +316,16 @@ class SkillMirrorTests(unittest.TestCase):
         "paper-draft": "general",
         "checkpoint": "obsidian",
         "project-archaeology": "obsidian",
+        "graphify": "graphify",
     }
     HOST_ADAPTED = {
         "santa-method": "general",
         "obsidian-audit": "obsidian",
         "obsidian-notes": "obsidian",
     }
-    # Claude-only: graphify ships with its own references/ tree and has no agy plugin.
-    CLAUDE_ONLY = {"graphify"}
+    # Nothing is Claude-only any more; a skill added to one stack must be mirrored or
+    # listed here with a reason.
+    CLAUDE_ONLY: set = set()
 
     def _pair(self, skill, plugin):
         return (self.CLAUDE_SKILLS / skill / "SKILL.md",
@@ -347,6 +349,21 @@ class SkillMirrorTests(unittest.TestCase):
                 self.assertEqual(claude.read_text(encoding="utf-8"),
                                  agy.read_text(encoding="utf-8"),
                                  f"the agy copy of {skill} has drifted from the Claude one")
+
+    def test_graphify_references_are_mirrored_too(self):
+        """graphify's SKILL.md loads files from references/; an agy copy without them
+        would route the agent to documents that are not there."""
+        c = self.CLAUDE_SKILLS / "graphify" / "references"
+        a = self.PLUGINS / "graphify" / "skills" / "graphify" / "references"
+        self.assertEqual(sorted(p.name for p in c.iterdir()), sorted(p.name for p in a.iterdir()))
+        for p in c.iterdir():
+            with self.subTest(ref=p.name):
+                self.assertEqual(p.read_bytes(), (a / p.name).read_bytes())
+
+    def test_graphify_plugin_registers_the_mcp_server_for_agy(self):
+        cfg = json.loads((self.PLUGINS / "graphify" / "mcp_config.json").read_text(encoding="utf-8"))
+        self.assertIn("graphify", cfg["mcpServers"])
+        self.assertIn("graphify-out/graph.json", json.dumps(cfg))
 
     def test_host_adapted_mirrors_keep_the_same_shape(self):
         """These differ only in host tool names, so their headings must still match."""
@@ -389,6 +406,60 @@ class SkillMirrorTests(unittest.TestCase):
             with self.subTest(skill=path.parent.name):
                 self.assertIsNotNone(declared)
                 self.assertEqual(declared.group(1), path.parent.name)
+
+
+class LedgerDefenceTests(unittest.TestCase):
+    """2026-09-20/21: three rtlgen checkpoints were appended with `cat >>` instead of
+    `checkpoint.py write`, so the intent ledger was replaced by a pointer and the next
+    session lost every binding item. The invariant lived in a script nothing forced the
+    agent to call. These pin the three defences: an always-loaded write rule, a reader
+    that flags the gap, and a hook that repairs shell writes to working-context.md."""
+
+    def test_the_write_rule_is_always_loaded_not_only_in_the_skill(self):
+        text = CLAUDE_INSTRUCTIONS.read_text(encoding="utf-8")
+        self.assertIn("checkpoint.py write", text)
+        self.assertRegex(text, r"(?i)never `cat >>`")
+        hook = SESSION_START.read_text(encoding="utf-8")
+        self.assertIn("checkpoint.py write", hook)
+
+    def test_reader_flags_a_dropped_ledger(self):
+        src = (REPO / "bin/checkpoint.py").read_text(encoding="utf-8")
+        for sym in ("def ledger_gap", "def render_read", "LEDGER GAP", "def repair_document", "def cmd_repair"):
+            self.assertIn(sym, src)
+        mcp = (REPO / "bin/vault-mcp.py").read_text(encoding="utf-8")
+        self.assertIn("cp.render_read(", mcp, "the MCP tool must use the same renderer as the CLI")
+
+    def test_repair_hook_is_bound_to_the_shell_tool_in_both_stacks(self):
+        claude = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))["hooks"]["PostToolUse"]
+        bash = [e for e in claude if e.get("matcher") == "Bash"]
+        self.assertTrue(bash and any("repair-checkpoint.sh" in h["command"] for h in bash[0]["hooks"]))
+        agy = json.loads((AGY / "hooks/hooks.json").read_text(encoding="utf-8"))["PostToolUse"]
+        self.assertTrue(any("repair-checkpoint.sh" in h["command"]
+                            for e in agy for h in e["hooks"]))
+        self.assertTrue((REPO / "hooks/repair-checkpoint.sh").is_file())
+
+    def test_repair_hook_delegates_to_checkpoint_py(self):
+        text = (REPO / "hooks/repair-checkpoint.sh").read_text(encoding="utf-8")
+        self.assertIn("checkpoint.py\" repair", text)
+
+    def test_working_mode_is_printed_at_session_start(self):
+        hook = SESSION_START.read_text(encoding="utf-8")
+        self.assertIn("decisions/working-mode.md", hook)
+        for path in (CLAUDE_RULES, AGY_RULES):
+            self.assertIn("working-mode.md", path.read_text(encoding="utf-8"),
+                          f"{path.relative_to(REPO)} does not list working mode in the intent set")
+
+    def test_session_start_surfaces_pending_promotions(self):
+        """READY was only ever printed in the turn it happened; the hook must re-raise it."""
+        hook = SESSION_START.read_text(encoding="utf-8")
+        self.assertIn("instincts.py\" pending", hook)
+
+    def test_dispositions_are_scoped_in_the_instructions(self):
+        text = CLAUDE_INSTRUCTIONS.read_text(encoding="utf-8")
+        self.assertIn("--scope global", text)
+        self.assertIn("working-mode.md", text)
+        stop = (REPO / "hooks/session-stop.sh").read_text(encoding="utf-8")
+        self.assertIn("--scope", stop)
 
 
 class SingleParserTests(unittest.TestCase):
