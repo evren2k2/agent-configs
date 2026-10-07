@@ -40,12 +40,7 @@ class QueueCase(unittest.TestCase):
         self._prev = os.environ.get("VAULT_PATH")
         os.environ["VAULT_PATH"] = str(self.vault)
         self.addCleanup(self._restore)
-        self.rules = self.vault / "learned-dispositions.md"
-        self.agy = self.vault / "agy" / "SKILL.md"
-        self._prev_rules, self._prev_agy = I.RULES_FILE, I.AGY_SKILL
-        I.RULES_FILE, I.AGY_SKILL = self.rules, self.agy
-        self.addCleanup(lambda: setattr(I, "RULES_FILE", self._prev_rules))
-        self.addCleanup(lambda: setattr(I, "AGY_SKILL", self._prev_agy))
+        self.rules = self.vault / "agent" / "learned-dispositions.md"
 
     def _restore(self):
         if self._prev is None:
@@ -143,7 +138,7 @@ class ProposeTests(QueueCase):
 
 
 class PromotionTests(QueueCase):
-    """The GLOBAL path: rules file + agy mirror. Project-scoped routing is in ScopeTests."""
+    """The GLOBAL path: the vault's agent/learned-dispositions.md. Project routing is in ScopeTests."""
     def test_promotion_below_the_bar_is_refused(self):
         self.quiet(self.propose, "unearned rule", scope="global")
         with self.assertRaises(SystemExit) as cm:
@@ -164,42 +159,27 @@ class PromotionTests(QueueCase):
         _, out = self.quiet(I.cmd_promote, Args(match="dry", apply=False, force=False))
         self.assertIn("nothing written", out)
         self.assertFalse(self.rules.exists())
-        self.assertFalse(self.agy.exists())
         self.assertEqual(len(I.load()), 1)
 
-    def test_promotion_lands_in_BOTH_stacks(self):
-        """agentcfg installs rules/ for Claude only, so agy takes the same content as a
-        skill. A promotion that reached one stack would be a Claude-only disposition."""
-        self.quiet(self.propose, "cross-stack rule", origin='User: "always do X"', scope="global")
-        self.backdate("cross-stack")
-        self.quiet(I.cmd_seen, Args(match="cross-stack"))
-        self.quiet(I.cmd_promote, Args(match="cross-stack", apply=True, force=False))
-        for path in (self.rules, self.agy):
-            self.assertTrue(path.exists(), f"{path} was not written")
-            self.assertIn("cross-stack rule", path.read_text(encoding="utf-8"))
+    def test_global_promotion_lands_in_the_vault_not_the_repo(self):
+        """Dispositions are the user's, so they live in the vault; the hook prints them."""
+        self.quiet(self.propose, "vault rule", origin='User: "always do X"', scope="global")
+        self.backdate("vault rule")
+        self.quiet(I.cmd_seen, Args(match="vault rule"))
+        _, out = self.quiet(I.cmd_promote, Args(match="vault rule", apply=True, force=False))
+        self.assertEqual(I.global_path(), self.rules)
+        self.assertIn(str(self.rules), out)
+        self.assertIn("- **vault rule**", self.rules.read_text(encoding="utf-8"))
 
-    def test_agy_copy_carries_skill_frontmatter(self):
-        """agy loads skills, which must declare name/description to be discoverable."""
+    def test_global_note_carries_vault_frontmatter_and_a_wikilink(self):
         self.quiet(self.propose, "frontmatter rule", scope="global")
-        self.backdate("frontmatter")
-        self.quiet(I.cmd_seen, Args(match="frontmatter"))
-        self.quiet(I.cmd_promote, Args(match="frontmatter", apply=True, force=False))
-        head = self.agy.read_text(encoding="utf-8")
-        self.assertTrue(head.startswith("---\n"))
-        self.assertIn("name: learned-dispositions", head)
-        self.assertIn("description:", head)
-
-    def test_both_stacks_stay_in_step_across_promotions(self):
-        for n in ("rule alpha", "rule beta"):
-            self.quiet(self.propose, n, scope="global")
-            self.backdate(n)
-            self.quiet(I.cmd_seen, Args(match=n))
-            self.quiet(I.cmd_promote, Args(match=n, apply=True, force=False))
-        c = self.rules.read_text(encoding="utf-8")
-        a = self.agy.read_text(encoding="utf-8")
-        for n in ("rule alpha", "rule beta"):
-            self.assertIn(n, c)
-            self.assertIn(n, a)
+        self.quiet(I.cmd_promote, Args(match="frontmatter", apply=True, force=True))
+        text = self.rules.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---\n"))
+        for field in ("date: 2", "tags:", "type: decision", "status: active"):
+            self.assertIn(field, text)
+        self.assertIn("[[", text)
+        self.assertNotIn("{today}", text)
 
     def test_apply_moves_it_out_of_the_queue(self):
         self.quiet(self.propose, "real rule", origin='User: "do it this way"', scope="global")
@@ -311,14 +291,12 @@ class ScopeTests(QueueCase):
         self.assertIn("[[demo/working-context]]", text)
         self.assertIn("- **speak plainly**", text)
         self.assertFalse(self.rules.exists(), "a project rule must not become global")
-        self.assertFalse(self.agy.exists())
         self.assertEqual(I.load(), [])
 
-    def test_global_promotion_lands_in_both_stacks(self):
+    def test_global_promotion_lands_in_the_global_note(self):
         self._ready("measure before claiming", scope="global")
         self.quiet(I.cmd_promote, Args(match="measure", apply=True, force=False, scope=None))
         self.assertIn("measure before claiming", self.rules.read_text(encoding="utf-8"))
-        self.assertIn("measure before claiming", self.agy.read_text(encoding="utf-8"))
         self.assertFalse((self.vault / "projects").exists())
 
     def test_scope_can_be_overridden_at_promotion(self):

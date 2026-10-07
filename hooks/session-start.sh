@@ -36,6 +36,14 @@ fi
 echo "Vault: ~/obsidian_notes/"
 echo "Vault MCP tools (pre-approved, callable as mcp__vault-mcp__<name>): vault_project | vault_semantic_search | vault_find | vault_show | vault_links | vault_checkpoint"
 echo "  A short name that does not resolve means the schema is unfetched, not that the tool is missing — fetch it, do not fall back to Read/Grep."
+# Global learned dispositions: the user's rulings on how to work in EVERY project.
+# They live in the vault, not the repo, and are printed here rather than installed as a
+# rules file — one print serves Claude and agy, and there is no link step to forget.
+LD="$VAULT/agent/learned-dispositions.md"
+if [ -f "$LD" ] && grep -q '^- ' "$LD"; then
+    echo "LEARNED DISPOSITIONS — binding in every project (agent/learned-dispositions.md):"
+    grep '^- ' "$LD" | head -25
+fi
 if [ -n "$MATCHED_PROJECT" ]; then
     echo "CWD project: $MATCHED_PROJECT"
     echo "Action: Call vault_project(name=\"$MATCHED_PROJECT\") to map this project's notes."

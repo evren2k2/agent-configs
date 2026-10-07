@@ -46,8 +46,13 @@ SCOPE — PROJECT BY DEFAULT
         SessionStart hook prints whenever that project is the CWD. This is the same
         content as the "working mode" rulings that used to live only in a checkpoint
         ledger — and were lost when one checkpoint failed to carry the ledger forward.
-      * global  -> .claude/rules/learned-dispositions.md (+ the agy mirror), loaded
-        in every session of every project.
+      * global  -> the vault's agent/learned-dispositions.md, which the SessionStart
+        hook prints in every session of every project.
+    Both live in the vault, not the repo: dispositions are the user's, and the repo is
+    the mechanism. A repo rules file also needed `agentcfg update --apply` to be linked
+    into ~/.claude/rules, and for a week it was not, so global rules loaded only when
+    the CWD was agent-configs. A hook print has no install step to forget, and one
+    print serves both stacks because agy runs the same session-start.sh.
     The signal that a rule is global is the same re-trigger evidence promotion already
     asks for: the identical rule proposed from a SECOND project. `propose` records the
     extra project and says so; `promote --scope global` makes the call, with approval.
@@ -79,17 +84,13 @@ CAP = 15                    # always-on budget; see module docstring
 PROMOTE_AT = 2              # distinct sessions a disposition must re-trigger in
 EXPIRE_DAYS = 90            # a proposal that never re-triggers is not a disposition
 
-# A promotion has to land in BOTH stacks or it is not a disposition, it is a Claude
-# disposition. agentcfg installs `rules/` for Claude only (AGENTS = ["claude"]), so agy
-# takes the same content as a skill in the general plugin — the arrangement already used
-# for behavioral-guidelines. Both files are written from one string by `promote`, because
-# a mirror that depends on someone remembering to update it is a mirror that drifts.
-RULES_FILE = BIN_DIR.parent / ".claude/rules/learned-dispositions.md"
-AGY_SKILL = (BIN_DIR.parent /
-             ".antigravity/plugins/general/skills/learned-dispositions/SKILL.md")
-
 FIELDS = ("disposition", "origin", "date", "project", "scope", "seen", "last_seen")
 SCOPES = ("project", "global")
+
+
+def global_path() -> Path:
+    """Where a GLOBAL disposition lands; session-start.sh prints it in every session."""
+    return vault_root() / "agent" / "learned-dispositions.md"
 
 
 def working_mode_path(project: str) -> Path:
@@ -134,7 +135,7 @@ HEADER = """\
 # Entries are proposals, scoped `project` (default) or `global`. Promotion -- only after
 # re-triggering in a later session, and only with the user's approval -- routes on scope:
 # project -> projects/<p>/decisions/working-mode.md (printed at session start for that
-# project); global -> .claude/rules/learned-dispositions.md (every session, every project).
+# project); global -> agent/learned-dispositions.md (printed in every session, every project).
 # Managed by bin/instincts.py; the cap is enforced, not requested.
 """
 
@@ -282,30 +283,29 @@ def cmd_seen(args) -> int:
     print(f"seen={x['seen']}: {x['disposition'][:70]}")
     if x["seen"] >= PROMOTE_AT:
         print("READY to promote — `instincts.py promote --match ... --apply` "
-              "(needs the user's approval; it edits a rules file loaded every session)")
+              "(needs the user's approval; it edits a note printed into every session)")
     return 0
 
 
-_BODY = """\
+# A global promotion lands in the vault, so it is a note like working-mode below. The
+# `seen` count in each entry is the evidence: an entry promoted with --force (the user's
+# call, e.g. when the queue is full) shows seen 1x, and the header must not claim more.
+GLOBAL_HEADER = """\
+---
+date: {today}
+tags: [agent_util, disposition, direction]
+type: decision
+status: active
+---
+
 # Learned dispositions
 
-How to work, learned from corrections in past sessions and promoted out of the
-`agent/instincts.yaml` staging queue by `bin/instincts.py`. Each entry re-triggered in
-at least {promote_at} separate sessions before landing here, and was approved by the user.
-
-These are deliberately kept apart from the hand-authored guidance in
-`behavioral-guidelines.md` so their provenance stays visible.
+How to work, in every project: corrections from past sessions, promoted out of the
+`agent/instincts.yaml` queue by `bin/instincts.py` with the user's approval — after
+re-triggering in a later session, or directly by the user. The SessionStart hook prints
+these in every session; each project's `decisions/working-mode.md` (e.g.
+[[agent-configs/decisions/working-mode]]) adds rulings for that project only. Never edit by hand; use `instincts.py promote --apply`.
 """
-
-RULES_HEADER = "---\ntitle: Learned dispositions\n---\n\n" + _BODY
-
-# agy loads skills, not rules, so the same content ships with skill frontmatter.
-AGY_HEADER = (
-    "---\nname: learned-dispositions\n"
-    "description: Dispositions learned from corrections in past sessions and promoted "
-    "from the instincts queue — how to work, not what is true about a system. Load at "
-    "the start of any task.\n---\n\n" + _BODY
-)
 
 
 # A project-scoped promotion lands in the vault, so it is a note: frontmatter and a
@@ -338,8 +338,7 @@ def _append(path: Path, header: str, block: str) -> None:
         text = path.read_text(encoding="utf-8").rstrip("\n") + "\n"
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-        text = header.replace("{promote_at}", str(PROMOTE_AT)) \
-                     .replace("{today}", datetime.date.today().isoformat())
+        text = header.replace("{today}", datetime.date.today().isoformat())
     _atomic_write_text(path, text + "\n" + block)
 
 
@@ -366,8 +365,8 @@ def cmd_promote(args) -> int:
              f"({project or '?'}); {x.get('origin', '')}</sub>\n")
 
     if scope == "global":
-        targets = [(RULES_FILE, RULES_HEADER), (AGY_SKILL, AGY_HEADER)]
-        where = "BOTH stacks (every session, every project)"
+        targets = [(global_path(), GLOBAL_HEADER)]
+        where = "the global learned-dispositions note (printed in every session)"
     else:
         targets = [(working_mode_path(project), WORKING_MODE_HEADER.format(project=project))]
         where = f"the {project} working-mode note (printed at session start for that project)"
@@ -436,7 +435,7 @@ def main() -> int:
     p.add_argument("--origin", default="", help="what re-triggered it, verbatim")
     p.set_defaults(fn=cmd_seen)
 
-    p = sub.add_parser("promote", help="move into the always-loaded rules file")
+    p = sub.add_parser("promote", help="move into the always-printed vault note (global or project working mode)")
     p.add_argument("--match", required=True)
     p.add_argument("--apply", action="store_true", help="actually write (user approved)")
     p.add_argument("--force", action="store_true", help="promote below the seen bar")

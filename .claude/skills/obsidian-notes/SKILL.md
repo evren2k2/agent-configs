@@ -166,7 +166,7 @@ python3 ~/.agent-configs/bin/instincts.py propose --disposition '<rule>' --origi
 python3 ~/.agent-configs/bin/instincts.py list
 ```
 
-A queued disposition does nothing until it is promoted into the always-loaded `learned-dispositions` guidance — `rules/learned-dispositions.md` for Claude, the `learned-dispositions` skill for agy. `instincts.py promote` writes both from one string, so the stacks cannot drift. Promotion requires re-triggering in a later session **and** the user's approval — always-on behavior is a direction-class write.
+A queued disposition does nothing until it is promoted. Promotion routes on scope, and both targets are vault notes the SessionStart hook prints, so Claude and agy see the same lines: global → `agent/learned-dispositions.md` (every session), project → `projects/<p>/decisions/working-mode.md` (sessions in that project). Promotion requires re-triggering in a later session **and** the user's approval — always-on behavior is a direction-class write.
 
 **Always propose, even if the rule may already be queued.** An identical disposition proposed in a *later* session is counted as that re-trigger, and it is the only way anything ever earns promotion; a same-day repeat is ignored, so a session cannot promote its own new rule. `instincts.py list` shows what is pending.
 

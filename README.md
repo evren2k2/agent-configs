@@ -97,7 +97,7 @@ python3 ~/.agent-configs/bin/instincts.py promote --match '<text>'            # 
 python3 ~/.agent-configs/bin/instincts.py promote --match '<text>' --apply    # after your approval
 ```
 
-Promotion routes on scope. A project rule lands in `projects/<p>/decisions/working-mode.md` in the vault, which the session-start hook prints for that project. A global rule (`--scope global`, or overridden at promotion) lands in `.claude/rules/learned-dispositions.md` and its agy mirror, loaded in every session. The signal that a project rule is really global is the same rule being proposed from a second project; `propose` records that and says so. The queue is capped at 15 and a rule that never recurs expires, so the always-on budget cannot grow unbounded.
+Promotion routes on scope. A project rule lands in `projects/<p>/decisions/working-mode.md` in the vault, which the session-start hook prints for that project. A global rule (`--scope global`, or overridden at promotion) lands in `agent/learned-dispositions.md` in the vault, which the same hook prints in every session of every project, for Claude and agy alike. The signal that a project rule is really global is the same rule being proposed from a second project; `propose` records that and says so. The queue is capped at 15 and a rule that never recurs expires, so the always-on budget cannot grow unbounded.
 
 ### Knowledge goes in the vault, in the right class
 
@@ -123,7 +123,7 @@ With a graph built, both agents are told to run `graphify query "<question>"` be
 .claude/
   instructions.md        global instructions, merged into ~/.claude/CLAUDE.md (named this way so the
                          repo's own CLAUDE.md is not injected twice when the CWD is this repo)
-  rules/                 behavioral-guidelines.md, obsidian-notes.md (+ learned-dispositions.md once promoted)
+  rules/                 behavioral-guidelines.md, obsidian-notes.md
   skills/                one directory per skill
   settings.json          hooks + permissions, deep-merged into ~/.claude/settings.json
 .antigravity/plugins/

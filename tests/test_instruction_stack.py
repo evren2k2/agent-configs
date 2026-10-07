@@ -285,6 +285,26 @@ class CheckpointDiscoveryTests(unittest.TestCase):
             r'if \[ -f "\$VAULT/projects/\$MATCHED_PROJECT/working-context\.md" \]',
             "the checkpoint hint is not gated on the file existing")
 
+    def test_session_start_prints_global_dispositions_only_when_the_vault_has_them(self):
+        """Global dispositions live in the vault and reach every session through this
+        print, for Claude and agy alike; no vault, or no note, must mean no line."""
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as home:
+            def run():
+                return subprocess.run(["bash", str(SESSION_START)], cwd=home, text=True,
+                                      capture_output=True, env={"HOME": home, "PATH": "/usr/bin:/bin"}).stdout
+            self.assertNotIn("LEARNED DISPOSITIONS", run())          # no vault at all
+            note = Path(home) / "obsidian_notes/agent/learned-dispositions.md"
+            note.parent.mkdir(parents=True)
+            note.write_text("---\ndate: 2026-10-07\n---\n\n# Learned dispositions\n", encoding="utf-8")
+            self.assertNotIn("LEARNED DISPOSITIONS", run())          # note with no entries
+            note.write_text(note.read_text() + "\n- **measure first**\n  <sub>provenance</sub>\n",
+                            encoding="utf-8")
+            out = run()
+            self.assertIn("LEARNED DISPOSITIONS", out)
+            self.assertIn("- **measure first**", out)
+            self.assertNotIn("provenance", out)
+
     def test_no_stack_still_claims_the_tools_need_no_lookup(self):
         """'always active' next to a bare short name is the premise that failed."""
         for stack, path in self.RULES.items():
