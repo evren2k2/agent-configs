@@ -99,7 +99,7 @@ python3 ~/.agent-configs/bin/instincts.py promote --match '<text>'            # 
 python3 ~/.agent-configs/bin/instincts.py promote --match '<text>' --apply    # after your approval
 ```
 
-Promotion routes on scope. A project rule lands in `projects/<p>/decisions/working-mode.md` in the vault, which the session-start hook prints for that project. A global rule (`--scope global`, or overridden at promotion) lands in `agent/learned-dispositions.md` in the vault, which the same hook prints in every session of every project, for Claude and agy alike. The signal that a project rule is really global is the same rule being proposed from a second project; `propose` records that and says so. The queue is capped at 15 and a rule that never recurs expires, so the always-on budget cannot grow unbounded.
+Promotion routes on scope. A project rule lands in `projects/<p>/decisions/working-mode.md` in the vault, which the session-start hook prints for that project. A global rule (`--scope global`, or overridden at promotion) lands in `agent/learned-dispositions.md` in the vault, which the same hook prints in every session of every project (Claude Code; agy does not load hooks yet). The signal that a project rule is really global is the same rule being proposed from a second project; `propose` records that and says so. The queue is capped at 15 and a rule that never recurs expires, so the always-on budget cannot grow unbounded.
 
 ### Knowledge goes in the vault, in the right class
 

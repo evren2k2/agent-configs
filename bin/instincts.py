@@ -52,7 +52,8 @@ SCOPE — PROJECT BY DEFAULT
     the mechanism. A repo rules file also needed `agentcfg update --apply` to be linked
     into ~/.claude/rules, and for a week it was not, so global rules loaded only when
     the CWD was agent-configs. A hook print has no install step to forget, and one
-    print serves both stacks because agy runs the same session-start.sh.
+    print is meant to serve both stacks; agy does not load these hooks yet (vault note
+    agy-hooks-never-loaded), so today only Claude Code sees it.
     The signal that a rule is global is the same re-trigger evidence promotion already
     asks for: the identical rule proposed from a SECOND project. `propose` records the
     extra project and says so; `promote --scope global` makes the call, with approval.
@@ -229,7 +230,8 @@ def cmd_propose(args) -> int:
               f"--project <p>\n"
               f"Only if the principle is genuinely new, re-run propose with --new. Word the rule "
               f"at the level of the principle — no benchmark, cell, file or tool names; the "
-              f"incident belongs in --origin — so the next instance matches it.")
+              f"incident belongs in --origin — so the next instance matches it. --origin = one line "
+              f"of context (what you had said or proposed), then the user's words verbatim.")
         return 2
 
     if len(items) >= args.cap:
@@ -455,7 +457,7 @@ def main() -> int:
     p = sub.add_parser("propose", help="queue a disposition learned from a correction")
     p.add_argument("--disposition", required=True, help="the rule, imperative, one line")
     p.add_argument("--origin", required=True,
-                   help="what produced it — quote the user's correction verbatim")
+                   help="one line of context (what you had said or proposed), then the user's correction verbatim")
     p.add_argument("--project", help="where the correction happened (required for scope=project)")
     p.add_argument("--scope", choices=SCOPES, default="project",
                    help="project (default): binds only on that project; global: every session")

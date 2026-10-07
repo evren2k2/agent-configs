@@ -38,7 +38,8 @@ echo "Vault MCP tools (pre-approved, callable as mcp__vault-mcp__<name>): vault_
 echo "  A short name that does not resolve means the schema is unfetched, not that the tool is missing — fetch it, do not fall back to Read/Grep."
 # Global learned dispositions: the user's rulings on how to work in EVERY project.
 # They live in the vault, not the repo, and are printed here rather than installed as a
-# rules file — one print serves Claude and agy, and there is no link step to forget.
+# rules file — there is no link step to forget. (agy does not run this hook yet: see the
+# vault note agy-hooks-never-loaded.)
 LD="$VAULT/agent/learned-dispositions.md"
 if [ -f "$LD" ] && grep -q '^- ' "$LD"; then
     echo "LEARNED DISPOSITIONS — binding in every project (agent/learned-dispositions.md):"

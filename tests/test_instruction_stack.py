@@ -287,7 +287,7 @@ class CheckpointDiscoveryTests(unittest.TestCase):
 
     def test_session_start_prints_global_dispositions_only_when_the_vault_has_them(self):
         """Global dispositions live in the vault and reach every session through this
-        print, for Claude and agy alike; no vault, or no note, must mean no line."""
+        print; no vault, or no note, must mean no line."""
         import subprocess, tempfile
         with tempfile.TemporaryDirectory() as home:
             def run():
@@ -306,7 +306,7 @@ class CheckpointDiscoveryTests(unittest.TestCase):
             self.assertNotIn("provenance", out)
 
     def test_keepalive_line_is_claude_only(self):
-        """agy runs the same hook but has no cron tool; it must not be told to ping."""
+        """agy has no cron tool; if it ever runs this hook it must not be told to ping."""
         import subprocess, tempfile
         with tempfile.TemporaryDirectory() as home:
             env = {"HOME": home, "PATH": "/usr/bin:/bin"}
