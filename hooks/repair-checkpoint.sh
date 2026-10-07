@@ -1,5 +1,5 @@
 #!/bin/bash
-# PostToolUse hook on the SHELL tool (Claude: Bash; agy: run_shell_command).
+# PostToolUse hook on the SHELL tool (Claude: Bash; agy: run_command, via hooks/agy-adapter.py).
 #
 # WHY THIS EXISTS
 #   The intent ledger is carried forward by `checkpoint.py write`. Nothing forces an

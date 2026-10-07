@@ -79,6 +79,25 @@ def agy_plugins() -> list[str]:
     root = REPO / ".antigravity/plugins"
     return sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
 
+# agy does not read the repo plugins live: `agy plugin install` COPIES them into this
+# root, and only the copy is active. Installing only when a plugin was missing left the
+# June 2026 copies in place for four months — stale skills, and hooks never imported.
+AGY_ACTIVE = HOME / ".gemini" / "config" / "plugins"
+
+def agy_snapshot_stale(name: str, active_root: Path = AGY_ACTIVE) -> list[str]:
+    """Repo plugin files that agy's active copy lacks or has different. [] = current."""
+    src, dst = REPO / ".antigravity/plugins" / name, active_root / name
+    if not src.is_dir():
+        return []
+    stale = []
+    for f in sorted(src.rglob("*")):
+        if f.is_file() and f.name != "plugin.json":
+            rel = f.relative_to(src)
+            g = dst / rel
+            if not g.is_file() or g.read_bytes() != f.read_bytes():
+                stale.append(str(rel))
+    return stale
+
 # ----------------------------------------------------------------- probes
 def is_ours(dest: Path) -> bool:
     if not dest.is_symlink():
@@ -343,7 +362,9 @@ def cmd_status():
     print(f"  [{c('ok','ok') if agy_mcp_has('vault-mcp') else c('missing','warn')}] vault-mcp @ {AGY_MCP_CONFIG}")
     print(f"  [{c('ok','ok') if path_rc() else c('missing','warn')}] {BIN_DIR} on PATH")
     for n in agy_plugins():
-        print(f"  [{_tri(agy_registered(n))}] agy plugin '{n}'")
+        stale = agy_snapshot_stale(n) if agy_registered(n) else []
+        mark = c(f"stale ({len(stale)} files)", "warn") if stale else _tri(agy_registered(n))
+        print(f"  [{mark}] agy plugin '{n}'")
 
 def _install_or_update(apply, label):
     print(f"agent-configs {label} ({'APPLYING' if apply else 'dry-run — pass --apply'})\n")
@@ -395,8 +416,11 @@ def cmd_install(apply):
     if not path_rc():
         _do(apply, f"add {BIN_DIR} to PATH", _add_path)
     for n in agy_plugins():
-        if agy_registered(n) is False:          # skip on unknown (no agy / timeout)
-            _do(apply, f"agy plugin install {n}",
+        reg = agy_registered(n)                 # skip on unknown (no agy / timeout)
+        stale = agy_snapshot_stale(n) if reg else []
+        if reg is False or stale:
+            why = f" (active copy stale: {', '.join(stale[:3])}{' …' if len(stale) > 3 else ''})" if stale else ""
+            _do(apply, f"agy plugin install {n}{why}",
                 lambda n=n: subprocess.run(["agy","plugin","install",
                                             str(HOME/".gemini/antigravity-cli/plugins"/n)], check=True))
     print("\nDependencies:")

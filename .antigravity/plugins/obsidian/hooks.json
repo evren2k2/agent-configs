@@ -1,0 +1,24 @@
+{
+  "agent-configs": {
+    "PreInvocation": [
+      {"type": "command", "command": "python3 ~/.agent-configs/hooks/agy-adapter.py PreInvocation session-start.sh", "timeout": 20}
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content|edit_file|create_file",
+        "hooks": [
+          {"type": "command", "command": "python3 ~/.agent-configs/hooks/agy-adapter.py PostToolUse validate-vault-write.sh detect-stale-notes.sh update-timeline.sh", "timeout": 30}
+        ]
+      },
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {"type": "command", "command": "python3 ~/.agent-configs/hooks/agy-adapter.py PostToolUse repair-checkpoint.sh", "timeout": 20}
+        ]
+      }
+    ],
+    "Stop": [
+      {"type": "command", "command": "python3 ~/.agent-configs/hooks/agy-adapter.py Stop session-stop.sh", "timeout": 20}
+    ]
+  }
+}

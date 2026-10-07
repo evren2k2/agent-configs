@@ -464,9 +464,9 @@ class LedgerDefenceTests(unittest.TestCase):
         claude = json.loads(CLAUDE_SETTINGS.read_text(encoding="utf-8"))["hooks"]["PostToolUse"]
         bash = [e for e in claude if e.get("matcher") == "Bash"]
         self.assertTrue(bash and any("repair-checkpoint.sh" in h["command"] for h in bash[0]["hooks"]))
-        agy = json.loads((AGY / "hooks/hooks.json").read_text(encoding="utf-8"))["PostToolUse"]
-        self.assertTrue(any("repair-checkpoint.sh" in h["command"]
-                            for e in agy for h in e["hooks"]))
+        agy = json.loads((AGY / "hooks.json").read_text(encoding="utf-8"))["agent-configs"]["PostToolUse"]
+        shell = [e for e in agy if e.get("matcher") == "run_command"]
+        self.assertTrue(shell and any("repair-checkpoint.sh" in h["command"] for h in shell[0]["hooks"]))
         self.assertTrue((REPO / "hooks/repair-checkpoint.sh").is_file())
 
     def test_repair_hook_delegates_to_checkpoint_py(self):

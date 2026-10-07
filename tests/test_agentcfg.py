@@ -194,3 +194,27 @@ class AgentcfgStripMd(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgySnapshotTests(unittest.TestCase):
+    """agy runs a COPY of each plugin; a repo edit must mark the copy stale."""
+
+    def setUp(self):
+        self.A = _load_agentcfg()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.active = Path(tmp.name)
+        self.name = self.A.agy_plugins()[0]
+        shutil.copytree(self.A.REPO / ".antigravity/plugins" / self.name, self.active / self.name,
+                        symlinks=False)
+
+    def test_identical_copy_is_current(self):
+        self.assertEqual(self.A.agy_snapshot_stale(self.name, self.active), [])
+
+    def test_changed_or_missing_file_is_stale(self):
+        f = next(p for p in (self.active / self.name).rglob("*.md"))
+        f.write_text("old copy", encoding="utf-8")
+        rel = str(f.relative_to(self.active / self.name))
+        self.assertEqual(self.A.agy_snapshot_stale(self.name, self.active), [rel])
+        f.unlink()
+        self.assertEqual(self.A.agy_snapshot_stale(self.name, self.active), [rel])
