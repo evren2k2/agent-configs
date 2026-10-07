@@ -58,10 +58,10 @@ SCOPE — PROJECT BY DEFAULT
     extra project and says so; `promote --scope global` makes the call, with approval.
 
 USAGE
-    instincts.py propose --disposition TEXT --origin TEXT --project P [--scope project|global]
+    instincts.py propose --disposition TEXT --origin TEXT --project P [--scope project|global] [--new]
     instincts.py list [--all]
     instincts.py pending                    # hook-friendly: READY / near-cap lines, else silent
-    instincts.py seen --match TEXT [--origin TEXT]   # re-triggered; earns promotion
+    instincts.py seen --match TEXT [--origin TEXT] [--project P]   # re-triggered; earns promotion
     instincts.py promote --match TEXT [--apply] [--scope project|global]
     instincts.py expire                     # drop stale never-re-triggered proposals
 """
@@ -146,6 +146,16 @@ def save(items: list[dict]) -> None:
     _atomic_write_text(queue_path(), HEADER + body)
 
 
+_STOP = set("a an the and or of to in on for is it its be as at by not no never "
+             "when before that this with from than what do does".split())
+
+
+def _words(text: str) -> set[str]:
+    """Content words, for ranking the queue by overlap with a candidate rule."""
+    return {w for w in "".join(c.lower() if c.isalnum() else " " for c in text).split()
+            if w not in _STOP and len(w) > 2}
+
+
 def find(items: list[dict], needle: str) -> int:
     """Index of the single entry matching `needle`, or exit with a useful message."""
     n = needle.lower()
@@ -199,6 +209,28 @@ def cmd_propose(args) -> int:
             print(f"already queued, already counted today (seen={x.get('seen', 1)}): "
                   f"{x['disposition'][:60]}")
         return 0
+
+    # THE RECURRENCE GATE. Exact-text duplicates were the only re-trigger the script
+    # could see, and an agent never rewords a rule identically: on 2026-10-07 the queue
+    # held 15 entries all at seen=1, of which 3, 8, 9 and 13 were one principle
+    # ("solve a deviation by declaration, not a fence") reworded around four incidents.
+    # Matching a correction to a principle is a judgement, so the script cannot make
+    # it — but it can refuse to skip it. A new entry needs --new, and only after the
+    # queue has been printed next to the candidate.
+    if items and not getattr(args, "new", False):
+        words = _words(text)
+        ranked = sorted(items, key=lambda x: -len(words & _words(x["disposition"])))
+        listing = "\n".join(f"  - {x['disposition']}" for x in ranked)
+        print(f"not queued yet. Candidate:\n  + {text}\n\nQueued ({len(items)}), closest first:\n"
+              f"{listing}\n\n"
+              f"Is the correction an instance of one of these, even though the incident "
+              f"differs? Then it is a RE-TRIGGER, which is what earns promotion:\n"
+              f"  instincts.py seen --match '<words from that rule>' --origin '<user, verbatim>' "
+              f"--project <p>\n"
+              f"Only if the principle is genuinely new, re-run propose with --new. Word the rule "
+              f"at the level of the principle — no benchmark, cell, file or tool names; the "
+              f"incident belongs in --origin — so the next instance matches it.")
+        return 2
 
     if len(items) >= args.cap:
         weakest = sorted(items, key=lambda x: (x.get("seen", 0), x.get("date", "")))[:3]
@@ -276,6 +308,13 @@ def cmd_seen(args) -> int:
     items = load()
     i = find(items, args.match)
     x = items[i]
+    project = getattr(args, "project", None)
+    if project and project != x.get("project"):
+        also = x.setdefault("also_seen_in", [])
+        if project not in also:
+            also.append(project)
+            print(f"re-triggered in a second project ({x.get('project')} -> {project}); "
+                  f"candidate for `promote --scope global`")
     if not bump(x, args.origin.strip() if getattr(args, "origin", "") else ""):
         print(f"already counted today (seen={x.get('seen', 1)}): {x['disposition'][:60]}")
         return 0
@@ -421,6 +460,9 @@ def main() -> int:
     p.add_argument("--scope", choices=SCOPES, default="project",
                    help="project (default): binds only on that project; global: every session")
     p.add_argument("--cap", type=int, default=CAP)
+    p.add_argument("--new", action="store_true",
+                   help="queue it although the queue is non-empty: only after checking that no "
+                        "queued rule states the same principle (else use `seen`)")
     p.set_defaults(fn=cmd_propose)
 
     p = sub.add_parser("list", help="show the queue")
@@ -433,6 +475,8 @@ def main() -> int:
     p = sub.add_parser("seen", help="mark re-triggered in this session")
     p.add_argument("--match", required=True)
     p.add_argument("--origin", default="", help="what re-triggered it, verbatim")
+    p.add_argument("--project", default=None,
+                   help="project it recurred in; a second project is the evidence for global")
     p.set_defaults(fn=cmd_seen)
 
     p = sub.add_parser("promote", help="move into the always-printed vault note (global or project working mode)")

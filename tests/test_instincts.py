@@ -48,9 +48,9 @@ class QueueCase(unittest.TestCase):
         else:
             os.environ["VAULT_PATH"] = self._prev
 
-    def propose(self, text, origin="user said so", cap=I.CAP, project="demo", scope=None):
+    def propose(self, text, origin="user said so", cap=I.CAP, project="demo", scope=None, new=True):
         return I.cmd_propose(Args(disposition=text, origin=origin,
-                                  project=project, cap=cap, scope=scope))
+                                  project=project, cap=cap, scope=scope, new=new))
 
     def backdate(self, match, day="2020-01-01"):
         """Pretend the last re-trigger happened in an earlier session."""
@@ -352,3 +352,50 @@ class PendingTests(QueueCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RecurrenceGateTests(QueueCase):
+    """2026-10-07: 15 entries, all seen=1, four of them one principle in four wordings.
+    A new rule must not enter a non-empty queue without the queue being shown first."""
+
+    def test_first_entry_needs_no_flag(self):
+        rc, out = self.quiet(self.propose, "measure before claiming", new=False)
+        self.assertNotEqual(rc, 2)
+        self.assertIn("queued", out)
+
+    def test_new_rule_is_held_and_the_queue_shown_closest_first(self):
+        self.quiet(self.propose, "never cite a number you have not measured")
+        self.quiet(self.propose, "ask before launching paid runs")
+        rc, out = self.quiet(self.propose, "do not cite a runtime you have not measured", new=False)
+        self.assertEqual(rc, 2)
+        self.assertEqual(len(I.load()), 2, "the candidate must not be queued")
+        self.assertLess(out.index("never cite a number"), out.index("ask before launching"))
+        self.assertIn("seen --match", out)
+        self.assertIn("--new", out)
+        self.assertIn("principle", out)
+
+    def test_new_flag_queues_it(self):
+        self.quiet(self.propose, "rule one")
+        self.quiet(self.propose, "an unrelated rule", new=True)
+        self.assertEqual(len(I.load()), 2)
+
+    def test_exact_duplicate_still_counts_without_the_flag(self):
+        self.quiet(self.propose, "same words")
+        self.backdate("same words")
+        _, out = self.quiet(self.propose, "same words", new=False)
+        self.assertIn("re-trigger", out)
+        self.assertEqual(I.load()[0]["seen"], 2)
+
+    def test_full_queue_still_allows_a_re_trigger_via_seen(self):
+        for n in range(3):
+            self.quiet(self.propose, f"rule number {n}", cap=3)
+        self.backdate("rule number 1")
+        self.quiet(I.cmd_seen, Args(match="rule number 1", origin="again"))
+        self.assertEqual(I.load()[1]["seen"], 2)
+
+    def test_seen_from_a_second_project_records_it(self):
+        self.quiet(self.propose, "speak plainly", project="alpha")
+        self.backdate("speak plainly")
+        _, out = self.quiet(I.cmd_seen, Args(match="speak plainly", origin="x", project="beta"))
+        self.assertEqual(I.load()[0]["also_seen_in"], ["beta"])
+        self.assertIn("global", out)

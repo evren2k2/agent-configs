@@ -168,7 +168,7 @@ python3 ~/.agent-configs/bin/instincts.py list
 
 A queued disposition does nothing until it is promoted. Promotion routes on scope, and both targets are vault notes the SessionStart hook prints, so Claude and agy see the same lines: global → `agent/learned-dispositions.md` (every session), project → `projects/<p>/decisions/working-mode.md` (sessions in that project). Promotion requires re-triggering in a later session **and** the user's approval — always-on behavior is a direction-class write.
 
-**Always propose, even if the rule may already be queued.** An identical disposition proposed in a *later* session is counted as that re-trigger, and it is the only way anything ever earns promotion; a same-day repeat is ignored, so a session cannot promote its own new rule. `instincts.py list` shows what is pending.
+**Match before you propose.** Most corrections are a new instance of a rule already queued, worded around a different incident. `propose` therefore holds any new rule, prints the queue closest-first, and queues only with `--new`. If a queued rule states the same principle — even though the example differs — run `instincts.py seen --match '<words from that rule>' --origin '<user, verbatim>' --project <p>` instead: that re-trigger is what earns promotion, and a second project is the evidence for global scope. **Word every rule at the level of the principle** — no benchmark, cell, file or tool names; the incident goes in `--origin` — so the next instance matches it.
 
 ---
 

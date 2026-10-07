@@ -90,6 +90,8 @@ python3 ~/.agent-configs/bin/instincts.py propose --disposition '<rule>' --origi
 python3 ~/.agent-configs/bin/instincts.py list            # what is queued, with scope
 ```
 
+`propose` holds a new rule until the agent has seen the queue: if a queued rule states the same principle with a different example, the agent records a re-trigger with `seen --match` instead, and only a genuinely new principle is queued (`--new`). Rules are worded at the level of the principle, with the incident in the origin, so the next instance matches.
+
 Dispositions are **project-scoped by default**, because projects differ in method: a rule about who writes verification on one project should not govern a paper-writing project. A queued rule does nothing until it recurs in a later session **and** you approve its promotion:
 
 ```bash
