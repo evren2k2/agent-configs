@@ -162,12 +162,19 @@ class VaultMCPServer:
                                     "`score` (~1.0 strong, <0.3 weak — semantic search always "
                                     "returns a top-k, so judge by the score). Complements "
                                     "vault_find (BM25 lexical); prefer vault_find for exact "
-                                    "symbol/name/project-ID lookups."),
+                                    "symbol/name/project-ID lookups. Pass `note` to search "
+                                    "inside one note (a Tier-2 read of a large note) or "
+                                    "`folder` to search one folder recursively; the scope is "
+                                    "applied before ranking, so `limit` hits still come back."),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "query": {"type": "string", "description": "Natural-language query / concept"},
-                            "limit": {"type": "integer", "default": 10}
+                            "limit": {"type": "integer", "default": 10},
+                            "note": {"type": "string",
+                                     "description": "Optional: only this note (stem, qualified key or path)"},
+                            "folder": {"type": "string",
+                                       "description": "Optional: only notes under this vault-relative folder, recursively (e.g. projects/rtlgen/evaluation)"}
                         },
                         "required": ["query"]
                     }
@@ -351,9 +358,25 @@ class VaultMCPServer:
                 "Semantic search unavailable: the dependencies (see requirements.txt) "
                 "are not installed, or the vector store has not been built "
                 "(run `vault embed`). Fall back to vault_find for this query.")}]}
+        path = None
+        if args.get("note"):
+            # Keys are bare stems unless ambiguous, so a path ("agent/session-log")
+            # never resolves as a key; match it against note paths first.
+            want = args["note"].strip().strip("/").removesuffix(".md") + ".md"
+            by_path = [k for k, n in idx["notes"].items()
+                       if n["path"] == want or n["path"].endswith("/" + want)]
+            key = by_path[0] if len(by_path) == 1 else \
+                vault.resolve_key(idx, args["note"].removesuffix(".md"))
+            if key is None:
+                return {"content": [{"type": "text", "text": (
+                    f"Error: no single note matches {args['note']!r} — qualify it with "
+                    f"more folder levels, or find it with vault_find.")}]}
+            path = idx["notes"][key]["path"]
+        folder = (args.get("folder") or "").strip().strip("/").removeprefix("./") or None
         import vault_embed
         encode, store = sem
-        hits = vault_embed.search(query, k=limit, encode=encode, store=store)
+        hits = vault_embed.search(query, k=limit, encode=encode, store=store,
+                                  path=path, folder=folder)
         results = []
         for h in hits:
             n = idx["notes"].get(h["key"])

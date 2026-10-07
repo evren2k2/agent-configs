@@ -335,7 +335,8 @@ def build_vectors(vault_path, index: dict, model_name: str = DEFAULT_MODEL,
 # -------------------------------------------------------------- search ----
 
 def search(query: str, vault_path=None, model_name: str = DEFAULT_MODEL,
-           k: int = 10, encode=None, store=None) -> list[dict]:
+           k: int = 10, encode=None, store=None, path: str | None = None,
+           folder: str | None = None) -> list[dict]:
     """Top-k note *paragraphs* by cosine similarity to `query`.
 
     Unlike a note-level search, several paragraphs from the same note can
@@ -349,6 +350,11 @@ def search(query: str, vault_path=None, model_name: str = DEFAULT_MODEL,
 
     `store` (a preloaded (vectors, meta) tuple) and `encode` may be injected so
     a long-lived caller — the MCP server — loads model + vectors only once.
+
+    `path` (a vault-relative note path) or `folder` (a vault-relative folder,
+    recursive) restricts the candidates BEFORE ranking, so a scoped search still
+    returns up to k hits from the scope rather than the scope's share of the
+    global top-k — a Tier-2 read of one large note, or a hunt inside one folder.
     """
     if store is None:
         store = load_store(vault_path, model_name)
@@ -357,8 +363,18 @@ def search(query: str, vault_path=None, model_name: str = DEFAULT_MODEL,
         return []
     if encode is None:
         encode = make_encoder(meta.get("model") or model_name)
-    q = _normalize(encode([query], is_query=True))[0]
-    scores = vectors @ q
     chunks = meta["chunks"]
-    order = np.argsort(-scores)[:k]
-    return [dict(chunks[i], score=float(scores[i])) for i in order]
+    if path is not None or folder is not None:
+        prefix = folder.strip("/") + "/" if folder else None
+        keep = [i for i, c in enumerate(chunks)
+                if (path is None or c["path"] == path)
+                and (prefix is None or c["path"].startswith(prefix))]
+        if not keep:
+            return []
+        idx = np.array(keep)
+    else:
+        idx = np.arange(len(chunks))
+    q = _normalize(encode([query], is_query=True))[0]
+    scores = vectors[idx] @ q
+    order = idx[np.argsort(-scores)[:k]]
+    return [dict(chunks[i], score=float(vectors[i] @ q)) for i in order]

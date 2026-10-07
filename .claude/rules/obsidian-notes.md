@@ -5,7 +5,7 @@ At session start the hook provides the project name. Use `vault_project` to enum
 
 **Tier 1 — read it yourself, whole.** Notes the query names, plus strong `vault_semantic_search` hits. Read directly while the running total stays under ~20k tokens and each note is under ~8 KB. The median vault note is ~1.7k tokens and 62% are under 2k, so this is the normal path, not an exception.
 
-**Tier 2 — read it yourself, in part.** For notes over ~8 KB (`agent/session-log.md`, `projects/rtlgen/decisions/tradeoffs-and-decisions.md`, `personal/deep-research-llm-for-chips/*`), neither read whole nor delegate: `vault_semantic_search` returns passages with line ranges — read just that range.
+**Tier 2 — read it yourself, in part.** For notes over ~8 KB (`agent/session-log.md`, `projects/rtlgen/decisions/tradeoffs-and-decisions.md`, `personal/deep-research-llm-for-chips/*`), neither read whole nor delegate: `vault_semantic_search` returns passages with line ranges — read just that range. Pass `note=` to search inside that one note, or `folder=` to stay inside one project folder.
 
 **Tier 3 — delegate breadth only.** Sweeping a large project (rtlgen is ~224k tokens across 94 notes) or "what else touches X". Require **pointers plus verbatim quotes of load-bearing lines** back — *"note X lines 40-58 has the timing numbers"* — never a paraphrase of technical values. The subagent routes; it does not compress. Prefer `general-purpose` when fidelity matters, since `Explore` reads excerpts by design.
 
@@ -20,7 +20,7 @@ Six native MCP tools are registered and pre-approved. You MUST use one before `R
 | Goal | Tool | Key arg |
 |------|------|---------|
 | Find a note by keyword / name (BM25 lexical) | `vault_find` | `query` |
-| Find passages about a concept (semantic) | `vault_semantic_search` | `query` |
+| Find passages about a concept (semantic) | `vault_semantic_search` | `query`; optional `note` (one note) or `folder` (recursive) |
 | List all notes in a project | `vault_project` | `name` |
 | Inspect a note's metadata + links | `vault_show` | `note` |
 | See who links to/from a note | `vault_links` | `note` |

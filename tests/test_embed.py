@@ -227,6 +227,30 @@ class SearchTests(EmbedTestCase):
         self.assertGreaterEqual(keys.count("long-note"), 2)
         self.assertEqual(hits[0]["key"], "long-note")
 
+    def test_note_scope_returns_only_that_note(self):
+        self.build()
+        hits = vault_embed.search("word", vault_path=self.tmp, encode=stub_encode,
+                                  k=10, path="areas/accelerator.md")
+        self.assertTrue(hits)
+        self.assertEqual({h["path"] for h in hits}, {"areas/accelerator.md"})
+
+    def test_folder_scope_filters_before_ranking(self):
+        """The scope is applied before top-k: a note that would never make the global
+        top-1 still comes back as its folder's best hit."""
+        (self.tmp / "areas/hw").mkdir()
+        (self.tmp / "areas/accelerator.md").rename(self.tmp / "areas/hw/accelerator.md")
+        self.build()
+        top = vault_embed.search("word", vault_path=self.tmp, encode=stub_encode, k=1)
+        self.assertEqual(top[0]["key"], "long-note")
+        hits = vault_embed.search("word", vault_path=self.tmp, encode=stub_encode,
+                                  k=1, folder="areas/hw/")
+        self.assertEqual([h["path"] for h in hits], ["areas/hw/accelerator.md"])
+
+    def test_scope_with_no_notes_returns_nothing(self):
+        self.build()
+        self.assertEqual(vault_embed.search("word", vault_path=self.tmp, encode=stub_encode,
+                                            folder="no/such/folder"), [])
+
     def test_empty_store_returns_nothing(self):
         # no build() → no vector store on disk
         hits = vault_embed.search("anything", vault_path=self.tmp, encode=stub_encode)

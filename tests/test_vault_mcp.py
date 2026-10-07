@@ -268,3 +268,57 @@ class BashFallbackTests(VaultMCPCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SemanticScopeTests(unittest.TestCase):
+    """`note` must resolve a vault path as well as a key: keys are bare stems unless
+    ambiguous, so "agent/session-log" — the large note this scope exists for — never
+    resolved as a key."""
+
+    def setUp(self):
+        import importlib.util
+        sys.path.insert(0, str(REPO / "bin"))
+        sys.path.insert(0, str(REPO / "tests"))
+        import vault, vault_embed
+        from test_embed import stub_encode
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "vault"
+        notes = {"agent/session-log.md": "session log entry about cache cost",
+                 "projects/a/working-context.md": "alpha context about cache",
+                 "projects/b/working-context.md": "beta context about cache"}
+        for rel, body in notes.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(f"---\ndate: 2026-10-07\n---\n\n# T\n\n{body}\n", encoding="utf-8")
+        prev = os.environ.get("XDG_CACHE_HOME")
+        os.environ["XDG_CACHE_HOME"] = str(Path(tmp.name) / "cache")
+        self.addCleanup(lambda: os.environ.__setitem__("XDG_CACHE_HOME", prev) if prev
+                        else os.environ.pop("XDG_CACHE_HOME", None))
+        self.idx = vault.load_index(root)
+        vault_embed.build_vectors(root, self.idx, encode=stub_encode)
+        store = vault_embed.load_store(root, vault_embed.DEFAULT_MODEL)
+        spec = importlib.util.spec_from_file_location("vault_mcp", SERVER)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.srv = mod.VaultMCPServer.__new__(mod.VaultMCPServer)
+        self.srv._ensure_semantic = lambda idx: (stub_encode, store)
+
+    def search(self, **args):
+        out = self.srv.tool_semantic_search(self.idx, dict(query="cache", limit=10, **args))
+        text = out["content"][0]["text"]
+        return text if text.startswith("Error") else {h["path"] for h in json.loads(text)}
+
+    def test_note_by_vault_path(self):
+        self.assertEqual(self.search(note="agent/session-log"), {"agent/session-log.md"})
+        self.assertEqual(self.search(note="agent/session-log.md"), {"agent/session-log.md"})
+
+    def test_note_by_qualified_path_suffix(self):
+        self.assertEqual(self.search(note="a/working-context"), {"projects/a/working-context.md"})
+
+    def test_ambiguous_note_is_an_error_not_a_guess(self):
+        self.assertTrue(self.search(note="working-context").startswith("Error"))
+
+    def test_folder(self):
+        self.assertEqual(self.search(folder="projects/b"), {"projects/b/working-context.md"})
+        self.assertEqual(self.search(folder="./projects/"),
+                         {"projects/a/working-context.md", "projects/b/working-context.md"})
