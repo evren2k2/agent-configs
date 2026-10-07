@@ -305,6 +305,16 @@ class CheckpointDiscoveryTests(unittest.TestCase):
             self.assertIn("- **measure first**", out)
             self.assertNotIn("provenance", out)
 
+    def test_keepalive_line_is_claude_only(self):
+        """agy runs the same hook but has no cron tool; it must not be told to ping."""
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as home:
+            env = {"HOME": home, "PATH": "/usr/bin:/bin"}
+            run = lambda e: subprocess.run(["bash", str(SESSION_START)], cwd=home, text=True,
+                                           capture_output=True, env=e).stdout
+            self.assertNotIn("cache-keepalive", run(env))
+            self.assertIn("cache-keepalive", run({**env, "CLAUDECODE": "1"}))
+
     def test_no_stack_still_claims_the_tools_need_no_lookup(self):
         """'always active' next to a bare short name is the premise that failed."""
         for stack, path in self.RULES.items():
@@ -343,9 +353,10 @@ class SkillMirrorTests(unittest.TestCase):
         "obsidian-audit": "obsidian",
         "obsidian-notes": "obsidian",
     }
-    # Nothing is Claude-only any more; a skill added to one stack must be mirrored or
-    # listed here with a reason.
-    CLAUDE_ONLY: set = set()
+    # A skill added to one stack must be mirrored or listed here with a reason.
+    # cache-keepalive: drives CronCreate and Anthropic's prompt-cache TTL, neither of
+    # which agy has; session-start.sh only advertises it when $CLAUDECODE is set.
+    CLAUDE_ONLY: set = {"cache-keepalive"}
 
     def _pair(self, skill, plugin):
         return (self.CLAUDE_SKILLS / skill / "SKILL.md",

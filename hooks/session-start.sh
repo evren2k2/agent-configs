@@ -70,6 +70,11 @@ fi
 # agent did not ask then, nothing reminded anyone. Surface it at the start of every session.
 timeout 5 python3 "$HOME/.agent-configs/bin/instincts.py" pending 2>/dev/null
 
+# --- Cache keep-alive (Claude Code only: it needs CronCreate and Anthropic's prompt cache) ---
+if [ -n "$CLAUDECODE" ]; then
+    echo "Cache keep-alive: once per session — at the start of long or large-context work, or when launching a long-running shell/subagent — ask the user whether to keep the cache warm while they are away; if yes, use the cache-keepalive skill."
+fi
+
 # --- Santa Method (surfaced only when a reviewer backend is configured) ---
 # Gitignored, machine-local config (copied from the tracked santa-method.json.example).
 SANTA_CONFIG="$HOME/.agent-configs/santa-method.json"
